@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.turbo/
+coverage/
+*.log
+.env
+.env.local
+data/
+packages/kicad-core/target/
+packages/kicad-core/pkg-web/
+packages/kicad-core/pkg-node/
+playwright-report/
+test-results/

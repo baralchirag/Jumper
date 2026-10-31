@@ -1,0 +1,23 @@
+# Backing services only, for `pnpm dev` on the host.
+#   docker compose -f docker/docker-compose.dev.yml up -d
+name: pcbhub-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment: { POSTGRES_USER: pcbhub, POSTGRES_PASSWORD: pcbhub, POSTGRES_DB: pcbhub }
+    ports: ['127.0.0.1:5432:5432']
+    volumes: [pgdata:/var/lib/postgresql/data]
+  redis:
+    image: redis:7-alpine
+    ports: ['127.0.0.1:6379:6379']
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ':9001'
+    environment: { MINIO_ROOT_USER: minioadmin, MINIO_ROOT_PASSWORD: minioadmin }
+    ports: ['127.0.0.1:9000:9000', '127.0.0.1:9001:9001']
+    volumes: [miniodata:/data]
+
+volumes:
+  pgdata:
+  miniodata:

@@ -1,0 +1,24 @@
+{
+  "name": "@pcbhub/viewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@pcbhub/kicad-core": "workspace:*",
+    "occt-import-js": "^0.0.23",
+    "pixi.js": "^8.22.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0"
+  },
+  "sideEffects": false
+}

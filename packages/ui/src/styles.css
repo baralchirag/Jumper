@@ -1,0 +1,192 @@
+/*
+ * PCBHub design tokens. Neutral grayscale with a single copper accent;
+ * intentionally no blues or purples. Light and dark themes, WCAG AA text contrast.
+ */
+:root {
+  color-scheme: light;
+  --pcb-canvas: #ffffff;
+  --pcb-canvas-subtle: #f6f7f6;
+  --pcb-canvas-inset: #eef0ee;
+  --pcb-canvas-overlay: #ffffff;
+  --pcb-border: #d3d7d4;
+  --pcb-border-muted: #e3e6e3;
+  --pcb-fg: #1c201e;
+  --pcb-fg-muted: #565d59;
+  --pcb-fg-subtle: #6f7672;
+  --pcb-fg-on-emphasis: #ffffff;
+  --pcb-accent: #a4521f;
+  --pcb-accent-emphasis: #b85d24;
+  --pcb-accent-muted: rgba(184, 93, 36, 0.35);
+  --pcb-accent-subtle: #fbf1ea;
+  --pcb-success: #1b7a3b;
+  --pcb-success-emphasis: #1d7f3e;
+  --pcb-success-subtle: #e9f5ec;
+  --pcb-danger: #b42821;
+  --pcb-danger-emphasis: #c8312a;
+  --pcb-danger-subtle: #fdeceb;
+  --pcb-attention: #8a5d00;
+  --pcb-attention-subtle: #fdf5e1;
+  --pcb-done: #8a4513;
+  --pcb-done-subtle: #f8ede4;
+  --pcb-neutral-muted: rgba(120, 128, 124, 0.2);
+  --pcb-diff-add-bg: #e6f4ea;
+  --pcb-diff-add-num: #cdebd5;
+  --pcb-diff-del-bg: #fbeaea;
+  --pcb-diff-del-num: #f6d3d2;
+  --pcb-diff-hunk: #f1f2f1;
+  --pcb-shadow: 0 1px 0 rgba(28, 32, 30, 0.04);
+  --pcb-shadow-overlay: 0 8px 24px rgba(28, 32, 30, 0.14);
+  --pcb-header-bg: #1c201e;
+  --pcb-header-fg: #f1f3f2;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --pcb-canvas: #101211;
+  --pcb-canvas-subtle: #161917;
+  --pcb-canvas-inset: #0b0c0c;
+  --pcb-canvas-overlay: #1b1e1c;
+  --pcb-border: #303532;
+  --pcb-border-muted: #242826;
+  --pcb-fg: #e4e7e5;
+  --pcb-fg-muted: #a0a8a3;
+  --pcb-fg-subtle: #858d88;
+  --pcb-fg-on-emphasis: #ffffff;
+  --pcb-accent: #e08a53;
+  --pcb-accent-emphasis: #c26a33;
+  --pcb-accent-muted: rgba(224, 138, 83, 0.4);
+  --pcb-accent-subtle: rgba(224, 138, 83, 0.12);
+  --pcb-success: #4cb56c;
+  --pcb-success-emphasis: #238043;
+  --pcb-success-subtle: rgba(76, 181, 108, 0.14);
+  --pcb-danger: #f0726b;
+  --pcb-danger-emphasis: #c93b33;
+  --pcb-danger-subtle: rgba(240, 114, 107, 0.13);
+  --pcb-attention: #d9a43a;
+  --pcb-attention-subtle: rgba(217, 164, 58, 0.14);
+  --pcb-done: #d39363;
+  --pcb-done-subtle: rgba(211, 147, 99, 0.14);
+  --pcb-neutral-muted: rgba(140, 148, 144, 0.22);
+  --pcb-diff-add-bg: rgba(76, 181, 108, 0.12);
+  --pcb-diff-add-num: rgba(76, 181, 108, 0.24);
+  --pcb-diff-del-bg: rgba(240, 114, 107, 0.11);
+  --pcb-diff-del-num: rgba(240, 114, 107, 0.22);
+  --pcb-diff-hunk: #191c1a;
+  --pcb-shadow: 0 0 0 transparent;
+  --pcb-shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --pcb-header-bg: #0b0c0c;
+  --pcb-header-fg: #e4e7e5;
+}
+
+@theme inline {
+  --color-canvas: var(--pcb-canvas);
+  --color-canvas-subtle: var(--pcb-canvas-subtle);
+  --color-canvas-inset: var(--pcb-canvas-inset);
+  --color-canvas-overlay: var(--pcb-canvas-overlay);
+  --color-border: var(--pcb-border);
+  --color-border-muted: var(--pcb-border-muted);
+  --color-fg: var(--pcb-fg);
+  --color-fg-muted: var(--pcb-fg-muted);
+  --color-fg-subtle: var(--pcb-fg-subtle);
+  --color-fg-on-emphasis: var(--pcb-fg-on-emphasis);
+  --color-accent: var(--pcb-accent);
+  --color-accent-emphasis: var(--pcb-accent-emphasis);
+  --color-accent-muted: var(--pcb-accent-muted);
+  --color-accent-subtle: var(--pcb-accent-subtle);
+  --color-success: var(--pcb-success);
+  --color-success-emphasis: var(--pcb-success-emphasis);
+  --color-success-subtle: var(--pcb-success-subtle);
+  --color-danger: var(--pcb-danger);
+  --color-danger-emphasis: var(--pcb-danger-emphasis);
+  --color-danger-subtle: var(--pcb-danger-subtle);
+  --color-attention: var(--pcb-attention);
+  --color-attention-subtle: var(--pcb-attention-subtle);
+  --color-done: var(--pcb-done);
+  --color-done-subtle: var(--pcb-done-subtle);
+  --color-neutral-muted: var(--pcb-neutral-muted);
+  --color-diff-add: var(--pcb-diff-add-bg);
+  --color-diff-add-num: var(--pcb-diff-add-num);
+  --color-diff-del: var(--pcb-diff-del-bg);
+  --color-diff-del-num: var(--pcb-diff-del-num);
+  --color-diff-hunk: var(--pcb-diff-hunk);
+  --color-header: var(--pcb-header-bg);
+  --color-header-fg: var(--pcb-header-fg);
+  --shadow-subtle: var(--pcb-shadow);
+  --shadow-overlay: var(--pcb-shadow-overlay);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    background: var(--pcb-canvas);
+    color: var(--pcb-fg);
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background: var(--pcb-canvas);
+    min-height: 100vh;
+  }
+  a {
+    color: inherit;
+  }
+  :focus-visible {
+    outline: 2px solid var(--pcb-accent-emphasis);
+    outline-offset: 1px;
+  }
+  ::selection {
+    background: var(--pcb-accent-muted);
+  }
+}
+
+@layer components {
+  .link {
+    color: var(--pcb-accent);
+    text-decoration: none;
+  }
+  .link:hover {
+    text-decoration: underline;
+  }
+  .link-muted {
+    color: var(--pcb-fg-muted);
+    text-decoration: none;
+  }
+  .link-muted:hover {
+    color: var(--pcb-accent);
+    text-decoration: underline;
+  }
+  .markdown-body {
+    font-size: 15px;
+    line-height: 1.6;
+    word-wrap: break-word;
+  }
+  .markdown-body > :first-child {
+    margin-top: 0;
+  }
+  .markdown-body h1,
+  .markdown-body h2 {
+    border-bottom: 1px solid var(--pcb-border-muted);
+    padding-bottom: 0.3em;
+  }
+  .markdown-body h1 { font-size: 2em; font-weight: 600; margin: 1.2em 0 0.6em; }
+  .markdown-body h2 { font-size: 1.5em; font-weight: 600; margin: 1.2em 0 0.6em; }
+  .markdown-body h3 { font-size: 1.25em; font-weight: 600; margin: 1.1em 0 0.5em; }
+  .markdown-body h4 { font-size: 1em; font-weight: 600; margin: 1em 0 0.5em; }
+  .markdown-body p, .markdown-body ul, .markdown-body ol, .markdown-body pre, .markdown-body table, .markdown-body blockquote { margin: 0 0 1em; }
+  .markdown-body ul { list-style: disc; padding-left: 2em; }
+  .markdown-body ol { list-style: decimal; padding-left: 2em; }
+  .markdown-body a { color: var(--pcb-accent); text-decoration: none; }
+  .markdown-body a:hover { text-decoration: underline; }
+  .markdown-body code { font-family: var(--font-mono); font-size: 85%; background: var(--pcb-neutral-muted); padding: 0.2em 0.4em; border-radius: 6px; }
+  .markdown-body pre { background: var(--pcb-canvas-subtle); padding: 16px; border-radius: 6px; overflow: auto; font-size: 85%; }
+  .markdown-body pre code { background: transparent; padding: 0; font-size: 100%; }
+  .markdown-body blockquote { color: var(--pcb-fg-muted); border-left: 0.25em solid var(--pcb-border); padding: 0 1em; }
+  .markdown-body table { border-collapse: collapse; display: block; overflow: auto; }
+  .markdown-body th, .markdown-body td { border: 1px solid var(--pcb-border); padding: 6px 13px; }
+  .markdown-body tr:nth-child(2n) { background: var(--pcb-canvas-subtle); }
+  .markdown-body img { max-width: 100%; }
+  .markdown-body hr { border: 0; border-top: 1px solid var(--pcb-border); margin: 1.5em 0; }
+}

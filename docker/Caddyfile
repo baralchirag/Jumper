@@ -1,0 +1,33 @@
+# Serves the SPA and proxies the API and git smart-HTTP to the api service.
+# For TLS, replace ":80" with your domain and Caddy provisions certificates.
+:80 {
+	encode zstd gzip
+
+	@api path /api/*
+	handle @api {
+		reverse_proxy api:3000
+	}
+
+	@git path_regexp git ^/[^/]+/[^/]+/(info/refs|git-upload-pack|git-receive-pack)$
+	handle @git {
+		request_body {
+			max_size 512MB
+		}
+		reverse_proxy api:3000 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		root * /srv
+		header /assets/* Cache-Control "public, max-age=31536000, immutable"
+		header {
+			X-Content-Type-Options nosniff
+			Referrer-Policy strict-origin-when-cross-origin
+			X-Frame-Options DENY
+			Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; worker-src 'self' blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'"
+		}
+		try_files {path} /index.html
+		file_server
+	}
+}

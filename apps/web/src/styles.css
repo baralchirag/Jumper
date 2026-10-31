@@ -1,0 +1,30 @@
+@import 'tailwindcss';
+@import '@pcbhub/ui/styles.css';
+
+@source '../../../packages/ui/src';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+.cm-editor {
+  font-size: 12px;
+  background: var(--pcb-canvas);
+}
+.cm-editor .cm-gutters {
+  background: var(--pcb-canvas);
+  color: var(--pcb-fg-subtle);
+  border-right: 1px solid var(--pcb-border-muted);
+}
+.cm-editor .cm-activeLine,
+.cm-editor .cm-activeLineGutter {
+  background: var(--pcb-accent-subtle);
+}
+.cm-editor.cm-focused {
+  outline: none;
+}
+.checker {
+  background-color: #f2f2f0;
+  background-image: linear-gradient(45deg, #e4e4e1 25%, transparent 25%), linear-gradient(-45deg, #e4e4e1 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e4e4e1 75%), linear-gradient(-45deg, transparent 75%, #e4e4e1 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}

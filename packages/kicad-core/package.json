@@ -1,0 +1,22 @@
+{
+  "name": "@pcbhub/kicad-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./types": "./ts/types.ts",
+    "./node": "./ts/node.ts",
+    "./web": "./ts/web.ts",
+    "./pkg-node/*": "./pkg-node/*",
+    "./pkg-web/*": "./pkg-web/*"
+  },
+  "scripts": {
+    "build": "pnpm run build:web && pnpm run build:node && pnpm run build:cli",
+    "build:web": "wasm-pack build --target web --out-dir pkg-web --out-name kicad_core --release --no-pack -- --features wasm",
+    "build:node": "wasm-pack build --target nodejs --out-dir pkg-node --out-name kicad_core --release --no-pack -- --features wasm && node -e \"require('fs').writeFileSync('pkg-node/package.json', JSON.stringify({type:'commonjs'}))\"",
+    "build:cli": "cargo build --release --features cli",
+    "test": "cargo test",
+    "lint": "cargo clippy --all-targets --features cli -- -D warnings",
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

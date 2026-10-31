@@ -1,0 +1,8 @@
+**/node_modules
+**/dist
+**/.turbo
+packages/kicad-core/target
+packages/kicad-core/pkg-*
+data
+.git
+.env
