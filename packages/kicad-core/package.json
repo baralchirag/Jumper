@@ -1,5 +1,5 @@
 {
-  "name": "@pcbhub/kicad-core",
+  "name": "@jumper/kicad-core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
     "./pkg-web/*": "./pkg-web/*"
   },
   "scripts": {
-    "build": "pnpm run build:web && pnpm run build:node && pnpm run build:cli",
+    "build": "node build.mjs",
     "build:web": "wasm-pack build --target web --out-dir pkg-web --out-name kicad_core --release --no-pack -- --features wasm",
     "build:node": "wasm-pack build --target nodejs --out-dir pkg-node --out-name kicad_core --release --no-pack -- --features wasm && node -e \"require('fs').writeFileSync('pkg-node/package.json', JSON.stringify({type:'commonjs'}))\"",
     "build:cli": "cargo build --release --features cli",

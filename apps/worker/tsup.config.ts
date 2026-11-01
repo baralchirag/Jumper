@@ -8,6 +8,6 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   // Inline workspace TS sources; the WASM binding is required at runtime.
-  noExternal: [/^@pcbhub\//],
-  external: [/^@pcbhub\/kicad-core\/pkg-/],
+  noExternal: [/^@jumper\//],
+  external: [/^@jumper\/kicad-core\/pkg-/],
 });

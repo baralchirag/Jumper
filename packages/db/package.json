@@ -1,5 +1,5 @@
 {
-  "name": "@pcbhub/db",
+  "name": "@jumper/db",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -15,7 +15,7 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "@pcbhub/shared": "workspace:*",
+    "@jumper/shared": "workspace:*",
     "drizzle-orm": "^0.45.4",
     "postgres": "^4.0.0"
   },

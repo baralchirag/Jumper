@@ -16,6 +16,11 @@ export default tseslint.config(
     },
   },
   {
+    // Integration tests assert on parsed JSON responses; typing every shape adds noise, not safety.
+    files: ['**/*.test.ts', 'apps/api/src/testing/**/*.ts'],
+    rules: { '@typescript-eslint/no-explicit-any': 'off' },
+  },
+  {
     files: ['apps/web/**/*.tsx', 'packages/ui/**/*.tsx'],
     plugins: { 'react-hooks': reactHooks },
     rules: {

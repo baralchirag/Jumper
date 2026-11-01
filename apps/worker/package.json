@@ -1,5 +1,5 @@
 {
-  "name": "@pcbhub/worker",
+  "name": "@jumper/worker",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,10 +12,10 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "@pcbhub/db": "workspace:*",
-    "@pcbhub/kicad-core": "workspace:*",
-    "@pcbhub/shared": "workspace:*",
-    "@pcbhub/storage": "workspace:*",
+    "@jumper/db": "workspace:*",
+    "@jumper/kicad-core": "workspace:*",
+    "@jumper/shared": "workspace:*",
+    "@jumper/storage": "workspace:*",
     "bullmq": "^6.5.1",
     "ioredis": "^6.0.0",
     "yaml": "^2.9.1",

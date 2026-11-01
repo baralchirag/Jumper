@@ -10,12 +10,12 @@ RUN corepack enable \
 WORKDIR /src
 COPY . .
 RUN pnpm install --frozen-lockfile \
- && pnpm --filter @pcbhub/kicad-core run build:node \
- && pnpm --filter @pcbhub/worker build \
- && pnpm --filter @pcbhub/worker deploy --prod --legacy /out \
+ && pnpm --filter @jumper/kicad-core run build:node \
+ && pnpm --filter @jumper/worker build \
+ && pnpm --filter @jumper/worker deploy --prod --legacy /out \
  && cp -r apps/worker/dist /out/dist \
- && mkdir -p /out/node_modules/@pcbhub/kicad-core \
- && cp -r packages/kicad-core/package.json packages/kicad-core/pkg-node /out/node_modules/@pcbhub/kicad-core/
+ && mkdir -p /out/node_modules/@jumper/kicad-core \
+ && cp -r packages/kicad-core/package.json packages/kicad-core/pkg-node /out/node_modules/@jumper/kicad-core/
 
 FROM kicad/kicad:${KICAD_VERSION}
 USER root

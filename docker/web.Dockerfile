@@ -7,8 +7,8 @@ RUN corepack enable \
 WORKDIR /src
 COPY . .
 RUN pnpm install --frozen-lockfile \
- && pnpm --filter @pcbhub/kicad-core run build:web \
- && pnpm --filter @pcbhub/web build
+ && pnpm --filter @jumper/kicad-core run build:web \
+ && pnpm --filter @jumper/web build
 
 FROM caddy:2-alpine
 COPY docker/Caddyfile /etc/caddy/Caddyfile

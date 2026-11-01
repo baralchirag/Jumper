@@ -2,7 +2,7 @@
 name = "kicad-core"
 version = "0.1.0"
 edition = "2021"
-description = "KiCad S-expression parser, typed model, semantic diff and BOM for PCBHub"
+description = "KiCad S-expression parser, typed model, semantic diff and BOM for Jumper"
 license = "AGPL-3.0-only"
 publish = false
 

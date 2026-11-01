@@ -1,5 +1,5 @@
 {
-  "name": "pcbhub",
+  "name": "jumper",
   "private": true,
   "description": "GitHub-style collaboration platform for KiCad hardware projects",
   "license": "AGPL-3.0-only",
@@ -9,15 +9,22 @@
   },
   "scripts": {
     "dev": "turbo run dev --parallel",
+    "start": "turbo run build && node scripts/start.mjs",
+    "start:fast": "node scripts/start.mjs",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "format": "prettier --write .",
-    "db:generate": "pnpm --filter @pcbhub/db generate",
-    "db:migrate": "pnpm --filter @pcbhub/db migrate",
-    "wasm": "pnpm --filter @pcbhub/kicad-core build",
-    "services": "node scripts/services.mjs"
+    "db:generate": "pnpm --filter @jumper/db generate",
+    "db:migrate": "pnpm --filter @jumper/db migrate",
+    "db:studio": "pnpm --filter @jumper/db studio",
+    "wasm": "pnpm --filter @jumper/kicad-core build",
+    "services": "node scripts/services.mjs",
+    "admin": "tsx --env-file-if-exists=.env apps/api/src/cli/admin.ts",
+    "admin:grant": "tsx --env-file-if-exists=.env apps/api/src/cli/admin.ts grant",
+    "admin:revoke": "tsx --env-file-if-exists=.env apps/api/src/cli/admin.ts revoke",
+    "admin:list": "tsx --env-file-if-exists=.env apps/api/src/cli/admin.ts list"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

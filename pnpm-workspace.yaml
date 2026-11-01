@@ -5,3 +5,6 @@ allowBuilds:
   esbuild: true
   msgpackr-extract: true
   '@embedded-postgres/linux-x64': true
+  # ssh2 falls back to pure-JS crypto; its native accelerators are optional.
+  ssh2: false
+  cpu-features: false

@@ -1,4 +1,4 @@
-# PCBHub self-hosted stack.
+# Jumper self-hosted stack.
 #   cp .env.example .env   # then edit secrets
 #   docker compose -f docker/docker-compose.yml up -d --build
 name: pcbhub
@@ -6,15 +6,15 @@ name: pcbhub
 x-env: &env
   NODE_ENV: production
   PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
-  DATABASE_URL: postgres://pcbhub:${POSTGRES_PASSWORD:-pcbhub}@postgres:5432/pcbhub
+  DATABASE_URL: postgres://pcbhub:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/pcbhub
   REDIS_URL: redis://redis:6379
   REPOS_DIR: /data/repos
   STORAGE_DRIVER: s3
   S3_ENDPOINT: http://minio:9000
   S3_REGION: us-east-1
   S3_BUCKET: pcbhub
-  S3_ACCESS_KEY: ${MINIO_ROOT_USER:-pcbhub}
-  S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-pcbhub-secret}
+  S3_ACCESS_KEY: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}
+  S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
 
 services:
   postgres:
@@ -22,7 +22,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: pcbhub
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pcbhub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: pcbhub
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
@@ -47,8 +47,8 @@ services:
     restart: unless-stopped
     command: server /data --console-address ':9001'
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-pcbhub}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-pcbhub-secret}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
     volumes: [miniodata:/data]
     healthcheck:
       test: ['CMD', 'mc', 'ready', 'local']
@@ -63,8 +63,26 @@ services:
       <<: *env
       API_PORT: 3000
       TRUST_PROXY: 'true'
+      ADMIN_ALLOWED_IPS: ${ADMIN_ALLOWED_IPS:-}
+      ALLOW_SIGNUP: ${ALLOW_SIGNUP:-true}
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      PRICING_ENABLED: ${PRICING_ENABLED:-true}
+      MOUSER_API_KEY: ${MOUSER_API_KEY:-}
+      DIGIKEY_CLIENT_ID: ${DIGIKEY_CLIENT_ID:-}
+      DIGIKEY_CLIENT_SECRET: ${DIGIKEY_CLIENT_SECRET:-}
+      # Encrypts stored mirror tokens. Set it, or a random key is kept on the repos volume.
+      SECRET_KEY: ${SECRET_KEY:-}
+      SECRET_KEY_FILE: /data/repos/.secret.key
+      # git over SSH: ssh://git@your-host:${SSH_PUBLIC_PORT:-2222}/owner/repo.git
+      SSH_ENABLED: ${SSH_ENABLED:-true}
+      SSH_PORT: 2222
+      SSH_PUBLIC_PORT: ${SSH_PUBLIC_PORT:-2222}
+      SSH_PUBLIC_HOST: ${SSH_PUBLIC_HOST:-}
+      SSH_HOST_KEY_FILE: /data/repos/.ssh_host_ed25519_key
+    ports: ['${SSH_PUBLIC_PORT:-2222}:2222']
     volumes: [repos:/data/repos]
     depends_on:
       postgres: { condition: service_healthy }
@@ -95,10 +113,19 @@ services:
   web:
     build: { context: .., dockerfile: docker/web.Dockerfile }
     restart: unless-stopped
-    ports: ['${HTTP_PORT:-8080}:80']
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    ports:
+      - '${HTTP_PORT:-8080}:80'
+      - '${HTTPS_PORT:-8443}:443'
+    volumes:
+      - caddy_data:/data     # certificates: losing this means re-issuing them
+      - caddy_config:/config
     depends_on: [api]
 
 volumes:
+  caddy_data:
+  caddy_config:
   pgdata:
   redisdata:
   miniodata:
