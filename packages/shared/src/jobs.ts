@@ -17,7 +17,8 @@ export type PlatformEvent =
       conclusion: CheckConclusion | null;
     }
   | { type: 'push'; repoId: string; ref: string; before: string | null; after: string | null }
-  | { type: 'pr'; repoId: string; number: number; action: string };
+  | { type: 'pr'; repoId: string; number: number; action: string }
+  | { type: 'issue'; repoId: string; number: number; action: string };
 
 export function repoTopic(repoId: string): string {
   return `repo:${repoId}`;

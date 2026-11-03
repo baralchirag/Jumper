@@ -67,7 +67,7 @@ export async function checkServices(endpoints: Endpoint[], timeoutMs = 3000): Pr
   }
   if (failures.length) {
     process.stderr.write(
-      `\nPCBHub cannot start: required services are unavailable.\n${failures.join('\n')}\n\n` +
+      `\nJumper cannot start: required services are unavailable.\n${failures.join('\n')}\n\n` +
         `Start them with Docker:  docker compose -f docker/docker-compose.dev.yml up -d\n` +
         `or install them locally and point DATABASE_URL / REDIS_URL in .env at them.\n\n`,
     );

@@ -1,5 +1,6 @@
 // Request schemas (validated by the API) and response types (consumed by the web app).
 import { z } from 'zod';
+import type { PlanId } from './plans';
 import {
   CHECK_CONCLUSIONS,
   CHECK_STATUSES,
@@ -12,6 +13,7 @@ import {
   type CheckName,
   type CheckStatus,
   type PrState,
+  type Capability,
   type RepoRole,
   type ReviewState,
 } from './constants';
@@ -19,6 +21,12 @@ import {
 const RESERVED_NAMES = new Set([
   'api', 'login', 'logout', 'signup', 'new', 'settings', 'explore', 'orgs', 'admin', 'assets',
   'static', 'help', 'about', 'search', 'notifications', 'pulls', 'issues', 'git', 'health',
+  // Existing top-level pages.
+  'docs', 'stars', 'tools', 'share', 'verify', 'forgot', 'reset', 'organizations',
+  // Legal and pages planned on the roadmap, kept free so they never shadow an account.
+  'terms', 'privacy', 'refunds', 'legal', 'pricing', 'billing', 'usage', 'embed', 'badge', 'badges', 'releases',
+  'templates', 'trending', 'featured', 'sso', 'oauth', 'plugin', 'download', 'downloads', 'status', 'security',
+  'contact', 'blog', 'enterprise', 'welcome', 'onboarding', 'referrals', 'invite', 'ghost',
 ]);
 
 export const slugSchema = z
@@ -52,17 +60,52 @@ export const registerSchema = z.object({
   username: slugSchema,
   email: z.email().max(254),
   password: z.string().min(10, 'Use at least 10 characters').max(256),
+  /** Username of whoever shared the invite link, from /signup?ref=. */
+  ref: z.string().max(100).optional(),
 });
+
+export interface ReferralInfo {
+  /** Your invite link. */
+  link: string;
+  signupOpen: boolean;
+  bonusPerReferralMb: number;
+  maxBonusMb: number;
+  /** Storage your running invite bonuses add right now. */
+  bonusMb: number;
+  /** How long each bonus lasts from the day the person joined, and when the earliest running one ends. */
+  bonusDays: number;
+  bonusExpiresAt: string | null;
+  /** False on instances that do not enforce plans: the bonus is recorded but there is no limit to raise. */
+  bonusApplies: boolean;
+  counted: number;
+  /** `active`: still adding storage today. */
+  invited: { username: string; joinedAt: string; counts: boolean; active: boolean }[];
+}
 
 export const loginSchema = z.object({
   login: z.string().min(1).max(254),
   password: z.string().min(1).max(256),
+  /** Six-digit code from the authenticator app, or a recovery code, when the account has two-factor login. */
+  code: z.string().trim().max(20).optional(),
 });
+
+const optionalUrl = z.union([z.literal(''), z.url({ protocol: /^https?$/ }).max(255)]);
 
 export const updateProfileSchema = z.object({
   name: z.string().max(100).optional(),
   email: z.email().max(254).optional(),
+  /** Required to change the email address of an account that has a password. */
+  currentPassword: z.string().max(256).optional(),
+  /** Email me about mentions and assignments. */
+  notifyEmail: z.boolean().optional(),
+  /** Send me the weekly summary of activity in my repositories. */
+  digestEmail: z.boolean().optional(),
   bio: z.string().max(500).optional(),
+  website: optionalUrl.optional(),
+  location: z.string().max(100).optional(),
+  company: z.string().max(100).optional(),
+  pronouns: z.string().max(40).optional(),
+  avatarUrl: optionalUrl.optional(),
 });
 
 export const changePasswordSchema = z.object({
@@ -84,9 +127,14 @@ export const createOrgSchema = z.object({
   description: z.string().max(500).optional(),
 });
 
+/** A built-in repository role, or `custom:<id>` for one of the owner's custom roles. */
+const roleRef = z.union([z.enum(REPO_ROLES), z.string().regex(/^custom:[0-9a-f-]{36}$/)]);
+
 export const orgMemberSchema = z.object({
   username: z.string().min(1),
   role: z.enum(['owner', 'member']).default('member'),
+  /** Access a member has to the organization's repositories: a built-in role or `custom:<id>`. Owners are always admins. */
+  repoRole: roleRef.optional(),
 });
 
 // ---------- repos ----------
@@ -97,6 +145,10 @@ export const createRepoSchema = z.object({
   description: z.string().max(350).default(''),
   visibility: z.enum(['public', 'private']).default('public'),
   initReadme: z.boolean().default(true),
+  /** Start from a small complete KiCad project instead of an empty README. */
+  sample: z.boolean().default(false),
+  /** Start from a starter project (see GET /api/templates), e.g. `esp32-s3`. */
+  template: z.string().max(40).optional(),
 });
 
 export const updateRepoSchema = z.object({
@@ -105,9 +157,11 @@ export const updateRepoSchema = z.object({
   visibility: z.enum(['public', 'private']).optional(),
   defaultBranch: branchNameSchema.optional(),
   requiredApprovals: z.number().int().min(0).max(10).optional(),
+  /** Restrict the repository to people cleared for export-controlled work (instance administrators only). */
+  exportControlled: z.boolean().optional(),
 });
 
-export const collaboratorSchema = z.object({ role: z.enum(REPO_ROLES) });
+export const collaboratorSchema = z.object({ role: roleRef });
 
 // ---------- pull requests ----------
 
@@ -183,13 +237,79 @@ export interface UserSummary {
   avatarUrl: string | null;
 }
 
-export interface CurrentUser extends UserSummary {
-  email: string;
+export interface ProfileFields {
   bio: string | null;
+  website: string | null;
+  location: string | null;
+  company: string | null;
+  pronouns: string | null;
+}
+
+export interface CurrentUser extends UserSummary, ProfileFields {
+  email: string;
+  createdAt: string;
   isAdmin: boolean;
+  /** False until the address is confirmed. Only matters when the instance enforces verification. */
+  emailVerified: boolean;
+  /** Receives email for mentions and assignments (when the instance can send mail). */
+  notifyEmail: boolean;
   hasPassword: boolean;
   githubLinked: boolean;
+  /** Receives the weekly summary email. */
+  digestEmail: boolean;
+  twoFactor: boolean;
+  /** Cleared to view export-controlled repositories. */
+  exportCleared: boolean;
   orgs: { slug: string; name: string; role: 'owner' | 'member' }[];
+  /** Plan of the user's personal namespace. */
+  plan: PlanId;
+}
+
+export interface SessionInfo {
+  id: string;
+  userAgent: string | null;
+  ip: string | null;
+  createdAt: string;
+  expiresAt: string;
+  current: boolean;
+}
+
+export interface AuditEntry {
+  id: string;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  metadata: Record<string, unknown>;
+  ip: string | null;
+  createdAt: string;
+  actor?: UserSummary | null;
+}
+
+export interface AdminTableInfo {
+  name: string;
+  rows: number;
+  bytes: number;
+  columns: { name: string; type: string; nullable: boolean; hidden: boolean }[];
+}
+
+export interface AdminTablePage {
+  table: string;
+  columns: { name: string; type: string; hidden: boolean }[];
+  rows: Record<string, unknown>[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AdminOverview {
+  counts: { users: number; orgs: number; repos: number; pulls: number; checks: number; artifacts: number; stars: number; sessions: number };
+  checks: { conclusion: string | null; status: string; n: number }[];
+  storageBytes: number;
+  repoBytes: number;
+  dbBytes: number;
+  recentUsers: (UserSummary & { createdAt: string; isAdmin: boolean; disabled: boolean })[];
+  recentAudit: AuditEntry[];
+  version: { node: string; postgres: string };
 }
 
 export interface TokenInfo {
@@ -217,8 +337,26 @@ export interface RepoInfo {
   updatedAt: string;
   pushedAt: string | null;
   permission: RepoRole | 'none';
+  /** What the viewer may do; differs from the role's defaults when they hold a custom role. */
+  capabilities: Capability[];
+  /** Name of the viewer's custom role, if any. */
+  customRole: string | null;
+  /** Only people cleared for export-controlled work can see this repository. */
+  exportControlled: boolean;
+  /** Under legal hold: nothing in it can be deleted. */
+  legalHold: boolean;
   openPullCount: number;
+  starCount: number;
+  /** Whether the signed-in viewer starred it; false for anonymous viewers. */
+  starred: boolean;
   cloneUrl: string;
+  /** SSH clone URL, or null when the server does not run SSH. */
+  sshCloneUrl: string | null;
+  /** The repository this one was forked from, when it still exists. */
+  forkOf: { owner: string; name: string } | null;
+  /** Picked by an administrator for the Explore page. */
+  featured?: boolean;
+  forkCount: number;
 }
 
 export interface NamespaceInfo {
@@ -227,9 +365,70 @@ export interface NamespaceInfo {
   name: string | null;
   bio: string | null;
   avatarUrl: string | null;
+  website?: string | null;
+  location?: string | null;
+  company?: string | null;
+  pronouns?: string | null;
+  starCount?: number;
   createdAt: string;
   repos: RepoInfo[];
   members?: (UserSummary & { role: 'owner' | 'member' })[];
+  /** Repositories the owner pinned to the top of the profile, in order (only ones the viewer can see). */
+  pinned?: RepoInfo[];
+  /** Portfolio figures across the public work shown here. */
+  stats?: { repos: number; releases: number; starsReceived: number; forksReceived: number };
+  /** People (users only). `viewerFollows` is false for signed-out viewers. */
+  followers?: number;
+  following?: number;
+  viewerFollows?: boolean;
+  /** The owner's plan; shown as a badge for paid plans. */
+  plan?: PlanId;
+}
+
+export const createInviteSchema = z.object({
+  role: z.enum(['owner', 'member']).default('member'),
+  repoRole: z.enum(['read', 'review', 'write', 'admin']).default('write'),
+  email: z.email().max(254).optional(),
+});
+
+export interface OrgInviteInfo {
+  id: string;
+  role: 'owner' | 'member';
+  repoRole: 'read' | 'review' | 'write' | 'admin';
+  email: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/** Returned once, when an invite is created: the only time the link exists in clear. */
+export interface CreatedInvite extends OrgInviteInfo {
+  link: string;
+  emailed: boolean;
+}
+
+/** What someone opening an invite link may see before joining. */
+export interface InvitePreview {
+  org: { slug: string; name: string; avatarUrl: string | null };
+  role: 'owner' | 'member';
+  invitedBy: string | null;
+  expiresAt: string;
+  /** Signed-in viewer is already in the organization. */
+  alreadyMember: boolean;
+}
+
+export interface FollowList {
+  users: (UserSummary & { bio: string | null; viewerFollows: boolean })[];
+  nextPage: number | null;
+}
+
+export const pinsSchema = z.object({ repos: z.array(z.string().min(1).max(100)).max(6) });
+
+export interface ExploreInfo {
+  featured: RepoInfo[];
+  /** Most activity in the last two weeks: new stars, forks, merged pull requests and releases. */
+  trending: RepoInfo[];
+  recent: RepoInfo[];
 }
 
 export interface GitSignature {
