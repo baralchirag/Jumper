@@ -12,8 +12,9 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import type { CheckDetails, CommentAnchor } from '@pcbhub/shared';
+import type { CheckDetails, CommentAnchor } from '@jumper/shared';
 
 const id = () => uuid('id').primaryKey().defaultRandom();
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
@@ -21,7 +22,7 @@ const updatedAt = () => timestamp('updated_at', { withTimezone: true }).notNull(
 
 export const namespaceKind = pgEnum('namespace_kind', ['user', 'org']);
 export const visibility = pgEnum('visibility', ['public', 'private']);
-export const repoRole = pgEnum('repo_role', ['read', 'write', 'admin']);
+export const repoRole = pgEnum('repo_role', ['read', 'review', 'write', 'admin']);
 export const orgRole = pgEnum('org_role', ['owner', 'member']);
 export const prState = pgEnum('pr_state', ['open', 'closed', 'merged']);
 export const reviewState = pgEnum('review_state', ['approved', 'changes_requested', 'commented']);
@@ -39,10 +40,34 @@ export const users = pgTable(
     passwordHash: text('password_hash'),
     name: text('name'),
     bio: text('bio'),
+    website: text('website'),
+    location: text('location'),
+    company: text('company'),
+    pronouns: text('pronouns'),
     avatarUrl: text('avatar_url'),
     githubId: text('github_id'),
     isAdmin: boolean('is_admin').notNull().default(false),
     disabled: boolean('disabled').notNull().default(false),
+    /** Null until the owner of the address proved they can read mail sent to it. */
+    emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
+    /** Email me about mentions and assignments (the in-app inbox is always on). */
+    notifyEmail: boolean('notify_email').notNull().default(true),
+    /** Weekly summary of activity in the repositories this user owns, follows or collaborates on. */
+    digestEmail: boolean('digest_email').notNull().default(true),
+    lastDigestAt: timestamp('last_digest_at', { withTimezone: true }),
+    /** TOTP secret, encrypted with the server key. Set while enrolling; active once `totpEnabledAt` is set. */
+    totpSecret: text('totp_secret'),
+    totpEnabledAt: timestamp('totp_enabled_at', { withTimezone: true }),
+    /** sha256 of each unused recovery code. */
+    recoveryCodes: text('recovery_codes').array().notNull().default(sql`'{}'::text[]`),
+    /** Cleared by an administrator to view export-controlled repositories. */
+    exportCleared: boolean('export_cleared').notNull().default(false),
+    /** Identifier in the company directory (SCIM externalId). */
+    externalId: text('external_id'),
+    /** Created or managed through SCIM: the directory decides whether the account is active. */
+    scimManaged: boolean('scim_managed').notNull().default(false),
+    /** Who invited this person with their referral link, if anyone. */
+    referredBy: uuid('referred_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -62,6 +87,8 @@ export const sessions = pgTable(
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     userAgent: text('user_agent'),
     ip: text('ip'),
+    /** Single sign-on connection this session was started through, if any. */
+    ssoConnectionId: uuid('sso_connection_id'),
     createdAt: createdAt(),
   },
   (t) => [index('sessions_user_idx').on(t.userId)],
@@ -97,9 +124,33 @@ export const orgMembers = pgTable(
     orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
     userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
     role: orgRole('role').notNull().default('member'),
+    /** What a member can do in the organization's repositories. Owners are always admins. */
+    repoRole: repoRole('repo_role').notNull().default('write'),
+    /** A custom role of the organization; when set it replaces `repoRole`. */
+    customRoleId: uuid('custom_role_id'),
     createdAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.orgId, t.userId] })],
+);
+
+/** A link that lets someone join an organization. Single use, expires, stored only as a hash. */
+export const orgInvites = pgTable(
+  'org_invites',
+  {
+    id: id(),
+    orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    role: orgRole('role').notNull().default('member'),
+    repoRole: repoRole('repo_role').notNull().default('write'),
+    /** Who the link was meant for; informational, and where it was emailed when mail is configured. */
+    email: text('email'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+    acceptedBy: uuid('accepted_by').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (t) => [uniqueIndex('org_invites_token_idx').on(t.tokenHash), index('org_invites_org_idx').on(t.orgId)],
 );
 
 /** Unifies users and organizations under one URL slug space (`/:owner`). */
@@ -111,6 +162,12 @@ export const namespaces = pgTable(
     kind: namespaceKind('kind').notNull(),
     userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
     orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }),
+    /** Plan id from @jumper/shared PLAN_IDS; assigned by an administrator. */
+    plan: text('plan').notNull().default('free'),
+    /** Billing cycle and invoice details (BillingProfile from @jumper/shared). */
+    billing: jsonb('billing').$type<Record<string, string>>().notNull().default({}),
+    /** Repositories shown first on the profile, in order (a portfolio). */
+    pinnedRepoIds: uuid('pinned_repo_ids').array().notNull().default(sql`'{}'::uuid[]`),
     createdAt: createdAt(),
   },
   (t) => [
@@ -131,9 +188,15 @@ export const repositories = pgTable(
     description: text('description').notNull().default(''),
     visibility: visibility('visibility').notNull().default('public'),
     defaultBranch: text('default_branch').notNull().default('main'),
+    /** Repository this one was forked from; cleared if the original is deleted. */
+    forkOfId: uuid('fork_of_id'),
     requiredApprovals: integer('required_approvals').notNull().default(0),
     nextNumber: integer('next_number').notNull().default(1),
     sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull().default(0),
+    /** Visible only to people cleared for export-controlled work, whatever their role. */
+    exportControlled: boolean('export_controlled').notNull().default(false),
+    /** Picked by an administrator for the Explore page; null when not featured. */
+    featuredAt: timestamp('featured_at', { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     pushedAt: timestamp('pushed_at', { withTimezone: true }),
@@ -150,9 +213,32 @@ export const repoCollaborators = pgTable(
     repoId: uuid('repo_id').notNull().references(() => repositories.id, { onDelete: 'cascade' }),
     userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
     role: repoRole('role').notNull().default('read'),
+    /** A custom role of the repository's owner; when set it replaces `role`. */
+    customRoleId: uuid('custom_role_id'),
     createdAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.repoId, t.userId] })],
+);
+
+export const stars = pgTable(
+  'stars',
+  {
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    repoId: uuid('repo_id').notNull().references(() => repositories.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.repoId] }), index('stars_repo_idx').on(t.repoId)],
+);
+
+/** A user following another user: their public activity shows up for the follower. */
+export const follows = pgTable(
+  'follows',
+  {
+    followerId: uuid('follower_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    followeeId: uuid('followee_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.followerId, t.followeeId] }), index('follows_followee_idx').on(t.followeeId)],
 );
 
 // ---------- pull requests ----------
@@ -171,6 +257,8 @@ export const pullRequests = pgTable(
     baseSha: text('base_sha').notNull(),
     headSha: text('head_sha').notNull(),
     state: prState('state').notNull().default('open'),
+    /** A draft cannot be merged until its author marks it ready for review. */
+    draft: boolean('draft').notNull().default(false),
     mergeCommitSha: text('merge_commit_sha'),
     mergedById: uuid('merged_by_id').references(() => users.id),
     mergedAt: timestamp('merged_at', { withTimezone: true }),
@@ -297,13 +385,16 @@ export const auditLog = pgTable(
     targetId: text('target_id'),
     metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
     ip: text('ip'),
+    /** Owner (user or organization) the event belongs to, for per-organization export. */
+    namespaceId: uuid('namespace_id'),
     createdAt: createdAt(),
   },
-  (t) => [index('audit_actor_idx').on(t.actorId), index('audit_created_idx').on(t.createdAt)],
+  (t) => [index('audit_actor_idx').on(t.actorId), index('audit_created_idx').on(t.createdAt), index('audit_namespace_idx').on(t.namespaceId, t.createdAt)],
 );
 
 export type User = typeof users.$inferSelect;
 export type Namespace = typeof namespaces.$inferSelect;
+export type OrgInvite = typeof orgInvites.$inferSelect;
 export type Repository = typeof repositories.$inferSelect;
 export type PullRequest = typeof pullRequests.$inferSelect;
 export type Comment = typeof comments.$inferSelect;
