@@ -1,11 +1,11 @@
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
-import { createDb, type Database } from '@pcbhub/db';
-import { EVENTS_CHANNEL, QUEUE_ANALYZE, type AnalyzeCommitJob, type PlatformEvent } from '@pcbhub/shared';
-import { createStorage, type Storage } from '@pcbhub/storage';
-import { watchRedis } from '@pcbhub/shared/node';
+import { createDb, type Database } from '@jumper/db';
+import { EVENTS_CHANNEL, QUEUE_ANALYZE, type AnalyzeCommitJob, type PlatformEvent } from '@jumper/shared';
+import { createStorage, type Storage } from '@jumper/storage';
+import { watchRedis } from '@jumper/shared/node';
 import type { Env } from './env';
-import { KicadPool } from './services/kicad-pool';
+import { KicadPool } from './modules/kicad/kicad-pool';
 
 export interface Ctx {
   env: Env;
@@ -17,6 +17,10 @@ export interface Ctx {
   storage: Storage;
   kicad: KicadPool;
   publish(event: PlatformEvent): Promise<void>;
+  /** In-process subscribers to platform events (webhooks, notifications). Errors are swallowed. */
+  listeners: ((event: PlatformEvent) => void | Promise<void>)[];
+  /** Set once the built-in SSH server is listening. */
+  sshHostKeyFingerprint?: string;
   close(): Promise<void>;
 }
 
@@ -46,10 +50,12 @@ export function createContext(env: Env): Ctx {
     rateLimitRedis,
     queue,
     storage,
-    kicad: new KicadPool(),
+    kicad: new KicadPool(undefined, env.KICAD_POOL === 'inline'),
+    listeners: [],
     async publish(event) {
-      // Live updates are best effort; never fail a request because of them.
-      await redis.publish(EVENTS_CHANNEL, JSON.stringify(event)).catch(() => {});
+      // Live updates are best effort: never fail or delay a request because Redis is slow or down.
+      void redis.publish(EVENTS_CHANNEL, JSON.stringify(event)).catch(() => {});
+      for (const l of this.listeners) Promise.resolve(l(event)).catch(() => {});
     },
     async close() {
       await queue.close();

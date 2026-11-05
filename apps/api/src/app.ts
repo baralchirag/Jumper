@@ -12,18 +12,10 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
-import { authPlugin } from './auth/plugin';
+import { authPlugin } from './modules/auth/plugin';
+import { registerModules } from './modules';
 import type { Ctx } from './context';
-import { gitHttpRoutes } from './git/http';
 import { HttpError } from './lib/errors';
-import authRoutes from './routes/auth';
-import checkRoutes from './routes/checks';
-import codeRoutes from './routes/code';
-import orgRoutes from './routes/orgs';
-import pullRoutes from './routes/pulls';
-import repoRoutes from './routes/repos';
-import userRoutes from './routes/user';
-import { wsRoutes } from './routes/ws';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -79,18 +71,20 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
     timeWindow: '1 minute',
     redis: ctx.rateLimitRedis,
     skipOnError: true,
-    nameSpace: 'pcbhub-rl:',
+    nameSpace: 'jumper-rl:',
     keyGenerator: (req) => req.user?.id ?? req.ip,
     // Large clones/pushes are throttled by size limits instead.
     allowList: (req) => /\/(info\/refs|git-upload-pack|git-receive-pack)$/.test(req.url.split('?')[0]!),
   });
   await app.register(authPlugin);
   await app.register(websocket, { options: { maxPayload: 64 * 1024 } });
-  await app.register(swagger, {
-    openapi: { info: { title: 'PCBHub API', version: '0.1.0' }, servers: [{ url: '/' }] },
-    transform: jsonSchemaTransform,
-  });
-  await app.register(swaggerUi, { routePrefix: '/api/docs' });
+  if (ctx.env.API_DOCS) {
+    await app.register(swagger, {
+      openapi: { info: { title: 'Jumper API', version: '0.1.0' }, servers: [{ url: '/' }] },
+      transform: jsonSchemaTransform,
+    });
+    await app.register(swaggerUi, { routePrefix: '/api/docs' });
+  }
 
   app.get('/api/health', async () => {
     await ctx.redis.ping();
@@ -98,14 +92,6 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
     return { ok: true };
   });
 
-  await app.register(authRoutes, { prefix: '/api/auth' });
-  await app.register(userRoutes, { prefix: '/api/user' });
-  await app.register(orgRoutes, { prefix: '/api/orgs' });
-  await app.register(repoRoutes, { prefix: '/api' });
-  await app.register(codeRoutes, { prefix: '/api' });
-  await app.register(pullRoutes, { prefix: '/api' });
-  await app.register(checkRoutes, { prefix: '/api' });
-  await app.register(wsRoutes);
-  await app.register(gitHttpRoutes);
+  await registerModules(app);
   return app;
 }
