@@ -1,4 +1,4 @@
-import { basename, dirname, stripExt } from '@pcbhub/shared';
+import { basename, dirname, stripExt } from '@jumper/shared';
 
 export interface Project {
   /** Directory of the project, relative to the repo root ('' for root). */

@@ -1,10 +1,10 @@
 import { Worker } from 'bullmq';
 import { Redis } from 'ioredis';
-import { createDb } from '@pcbhub/db';
-import { kicadCore } from '@pcbhub/kicad-core/node';
-import { QUEUE_ANALYZE, type AnalyzeCommitJob } from '@pcbhub/shared';
-import { POSTGRES_HINT, REDIS_HINT, checkServices, watchRedis } from '@pcbhub/shared/node';
-import { createStorage } from '@pcbhub/storage';
+import { createDb } from '@jumper/db';
+import { kicadCore } from '@jumper/kicad-core/node';
+import { QUEUE_ANALYZE, type AnalyzeCommitJob } from '@jumper/shared';
+import { POSTGRES_HINT, REDIS_HINT, checkServices, watchRedis } from '@jumper/shared/node';
+import { createStorage } from '@jumper/storage';
 import { Analyzer } from './analyze';
 import { loadEnv } from './env';
 import { log, setLogLevel } from './log';

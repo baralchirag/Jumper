@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { parsePcbhubConfig } from '@pcbhub/shared';
+import { parseJumperConfig } from '@jumper/shared';
 import { evaluateDrc, evaluateErc } from './reports';
 
-const cfg = (yaml = '') => parsePcbhubConfig(yaml).config;
+const cfg = (yaml = '') => parseJumperConfig(yaml).config;
 
 describe('evaluateDrc', () => {
   const report = {

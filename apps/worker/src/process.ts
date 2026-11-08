@@ -11,14 +11,14 @@ export interface RunResult {
 export function run(
   cmd: string,
   args: string[],
-  opts: { cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs: number; input?: NodeJS.ReadableStream; stdoutTo?: NodeJS.WritableStream },
+  opts: { cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs: number; input?: NodeJS.ReadableStream; stdoutTo?: NodeJS.WritableStream; maxOutput?: number },
 ): Promise<RunResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { cwd: opts.cwd, env: opts.env, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     let timedOut = false;
-    const cap = 64 * 1024;
+    const cap = opts.maxOutput ?? 64 * 1024;
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill('SIGKILL');

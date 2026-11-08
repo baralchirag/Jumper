@@ -1,4 +1,7 @@
-import { resolveDataPath } from '@pcbhub/shared/node';
+import { existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { resolveDataPath } from '@jumper/shared/node';
+import { resolvePlans, type Plan, type PlanId } from '@jumper/shared';
 import { z } from 'zod';
 
 const envSchema = z.object({
@@ -7,22 +10,54 @@ const envSchema = z.object({
   REDIS_URL: z.string().default('redis://localhost:6379'),
   REPOS_DIR: z.string().default('./data/repos'),
   WORKER_SANDBOX: z.enum(['docker', 'none']).default('none'),
-  WORKER_KICAD_IMAGE: z.string().default('pcbhub/kicad-worker:latest'),
+  WORKER_KICAD_IMAGE: z.string().default('jumper/kicad-worker:latest'),
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(2),
   WORKER_JOB_TIMEOUT_MS: z.coerce.number().int().default(10 * 60_000),
   WORKER_STEP_TIMEOUT_MS: z.coerce.number().int().default(5 * 60_000),
   WORKER_MAX_CHECKOUT_BYTES: z.coerce.number().int().default(1024 * 1024 * 1024),
   WORKER_DOCKER_MEMORY: z.string().default('4g'),
   WORKER_DOCKER_CPUS: z.string().default('2'),
-  KICAD_CLI: z.string().default('kicad-cli'),
+  /**
+   * kicad-cli binary. "auto" uses kicad-cli on PATH, or the host's kicad-cli via
+   * flatpak-spawn when the worker itself runs inside a Flatpak sandbox (e.g. an IDE terminal).
+   */
+  KICAD_CLI: z.string().default('auto'),
+  /** KiCad 3D model library as seen by kicad-cli (host path in Flatpak mode, image path in Docker mode). */
+  WORKER_KICAD_3DMODEL_DIR: z.string().default('/usr/share/kicad/3dmodels'),
+  /** KiCad's standard symbol (*.kicad_sym) and footprint (*.pretty) libraries, to tell standard libraries from missing ones. */
+  WORKER_KICAD_SYMBOL_DIR: z.string().default('/usr/share/kicad/symbols'),
+  WORKER_KICAD_FOOTPRINT_DIR: z.string().default('/usr/share/kicad/footprints'),
+  /** Scratch space for checkouts. Must be visible to kicad-cli (shared with the host in Flatpak mode). */
+  WORKER_TMP_DIR: z.string().optional(),
+  /** Same as the API: pause checks for owners over their monthly check minutes. */
+  PLANS_ENFORCED: z.stringbool().default(false),
+  PLAN_LIMITS: z.string().optional(),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
 });
 
-export type WorkerEnv = z.output<typeof envSchema> & { reposDir: string };
+export type WorkerEnv = z.output<typeof envSchema> & {
+  reposDir: string;
+  tmpDir: string;
+  plans: Record<PlanId, Plan>;
+  /** Run kicad-cli on the Flatpak host (flatpak-spawn --host). */
+  hostSpawn: boolean;
+};
+
+const inFlatpak = () => existsSync('/.flatpak-info') && existsSync('/usr/bin/flatpak-spawn');
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): WorkerEnv {
   const cleaned = Object.fromEntries(Object.entries(source).filter(([, v]) => v !== ''));
   const parsed = envSchema.safeParse(cleaned);
   if (!parsed.success) throw new Error(`Invalid environment:\n${z.prettifyError(parsed.error)}`);
-  return { ...parsed.data, reposDir: resolveDataPath(parsed.data.REPOS_DIR) };
+  const d = parsed.data;
+  const hostSpawn = d.WORKER_SANDBOX === 'none' && (d.KICAD_CLI === 'host' || (d.KICAD_CLI === 'auto' && inFlatpak()));
+  // The Flatpak sandbox has a private /tmp, so host-side kicad-cli needs a shared scratch dir.
+  const tmpDir = d.WORKER_TMP_DIR ? resolveDataPath(d.WORKER_TMP_DIR) : hostSpawn ? resolveDataPath('./data/tmp') : tmpdir();
+  let overrides: unknown;
+  try {
+    overrides = d.PLAN_LIMITS ? JSON.parse(d.PLAN_LIMITS) : undefined;
+  } catch {
+    throw new Error('PLAN_LIMITS must be JSON, e.g. {"free":{"checkMinutes":1000}}');
+  }
+  return { ...d, reposDir: resolveDataPath(d.REPOS_DIR), tmpDir, hostSpawn, plans: resolvePlans(overrides) };
 }

@@ -1,4 +1,4 @@
-import type { CheckAnnotation, CheckConclusion, PcbhubConfig } from '@pcbhub/shared';
+import type { CheckAnnotation, CheckConclusion, JumperConfig } from '@jumper/shared';
 
 interface KicadItem {
   description?: string;
@@ -68,13 +68,13 @@ function evaluate(
   return { conclusion, summary, counts, annotations };
 }
 
-export function evaluateErc(report: unknown, config: PcbhubConfig): Evaluation {
+export function evaluateErc(report: unknown, config: JumperConfig): Evaluation {
   const r = report as { sheets?: { path?: string; violations?: KicadViolation[] }[] };
   const list = (r.sheets ?? []).flatMap((s) => (s.violations ?? []).map((v) => ({ v, extra: { sheet: s.path } })));
   return evaluate(list, config.severity_overrides.erc, config.checks.erc.fail_on, 'ERC');
 }
 
-export function evaluateDrc(report: unknown, config: PcbhubConfig): Evaluation {
+export function evaluateDrc(report: unknown, config: JumperConfig): Evaluation {
   const r = report as { violations?: KicadViolation[]; unconnected_items?: KicadViolation[]; schematic_parity?: KicadViolation[] };
   const cfg = config.checks.drc;
   const list = [

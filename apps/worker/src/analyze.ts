@@ -1,29 +1,35 @@
 import { createReadStream, createWriteStream } from 'node:fs';
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import type { Redis } from 'ioredis';
 import yazl from 'yazl';
-import { artifacts, checkRuns, eq, repositories, type Database } from '@pcbhub/db';
-import type { KicadCore, Pcb } from '@pcbhub/kicad-core/node';
+import { artifacts, checkRuns, eq, namespaceUsage, namespaces, repositories, type Database } from '@jumper/db';
+import type { KicadCore, Pcb } from '@jumper/kicad-core/node';
 import {
+  CHECK_NAMES,
   EVENTS_CHANNEL,
-  parsePcbhubConfig,
+  isPlanId,
+  parseJumperConfig,
   type AnalyzeCommitJob,
   type ArtifactKind,
   type CheckConclusion,
   type CheckDetails,
   type CheckName,
   type CheckStatus,
-  type PcbhubConfig,
+  type JumperConfig,
   type PlatformEvent,
-} from '@pcbhub/shared';
-import { artifactKey, contentTypeFor, type Storage } from '@pcbhub/storage';
+  FAB_PACKAGE_LABELS,
+} from '@jumper/shared';
+import { artifactKey, contentTypeFor, type Storage } from '@jumper/storage';
 import { discoverProjects, type Project } from './discover';
 import type { WorkerEnv } from './env';
 import * as git from './git';
 import { describeFailure, KicadCli } from './kicad-cli';
 import { log } from './log';
+import type { BomLine } from '@jumper/kicad-core/node';
+import { FAB_LAYOUTS, isFabFile, isNonPart } from './fab';
+import { fixModelPaths } from './models3d';
+import { libraryReport, librarySummary, sheetFiles, type LibraryReport } from './libraries';
 import { evaluateDrc, evaluateErc } from './reports';
 
 const COPPER_KINDS = new Set(['signal', 'power', 'mixed', 'jumper']);
@@ -106,18 +112,42 @@ export class Analyzer {
       });
   }
 
+  /** A message when the owner has used this month's check minutes (only when plans are enforced), else null. */
+  private async minutesExhausted(repo: { namespaceId: string; plan: string; owner: string }): Promise<string | null> {
+    const { env } = this.deps;
+    if (!env.PLANS_ENFORCED) return null;
+    const plan = env.plans[isPlanId(repo.plan) ? repo.plan : 'free'];
+    if (plan.limits.checkMinutes === null) return null;
+    const used = (await namespaceUsage(this.deps.db, repo.namespaceId)).checkMinutes;
+    if (used < plan.limits.checkMinutes) return null;
+    return `Paused: ${repo.owner} has used all ${plan.limits.checkMinutes} check minutes on the ${plan.name} plan this month. Checks resume on the 1st (UTC); push again then, or ask an administrator for a bigger plan.`;
+  }
+
   async run(job: AnalyzeCommitJob): Promise<void> {
     const { env } = this.deps;
-    const repoRow = (await this.deps.db.select({ id: repositories.id }).from(repositories).where(eq(repositories.id, job.repoId)).limit(1))[0];
+    const repoRow = (
+      await this.deps.db
+        .select({ id: repositories.id, namespaceId: repositories.namespaceId, plan: namespaces.plan, owner: namespaces.slug })
+        .from(repositories)
+        .innerJoin(namespaces, eq(namespaces.id, repositories.namespaceId))
+        .where(eq(repositories.id, job.repoId))
+        .limit(1)
+    )[0];
     if (!repoRow) {
       log.info('repository gone, skipping', { ...job });
+      return;
+    }
+    const minutesBlock = await this.minutesExhausted(repoRow);
+    if (minutesBlock) {
+      for (const name of CHECK_NAMES) await this.setCheck(job, name, '', 'completed', { conclusion: 'skipped', summary: minutesBlock });
+      log.info('check minutes used up, skipping', { ...job, owner: repoRow.owner });
       return;
     }
     const repo = git.repoPath(env.reposDir, job.repoId);
     const deadline = Date.now() + env.WORKER_JOB_TIMEOUT_MS;
 
-    const cfgText = await git.readFile(repo, job.sha, '.pcbhub.yml', 256 * 1024);
-    const { config, error: configError } = parsePcbhubConfig(cfgText);
+    const cfgText = await git.readFile(repo, job.sha, '.jumper.yml', 256 * 1024);
+    const { config, error: configError } = parseJumperConfig(cfgText);
     const files = await git.listFiles(repo, job.sha);
     const projects = discoverProjects(
       files.map((f) => f.path),
@@ -125,7 +155,7 @@ export class Analyzer {
     );
 
     if (!projects.length) {
-      const summary = configError ? `Invalid .pcbhub.yml: ${configError}` : 'No KiCad project found in this commit';
+      const summary = configError ? `Invalid .jumper.yml: ${configError}` : 'No KiCad project found in this commit';
       for (const name of ['ERC', 'DRC', 'BOM', 'Render', 'Exports'] as CheckName[]) {
         await this.setCheck(job, name, '', 'completed', { conclusion: configError ? 'failure' : 'skipped', summary });
       }
@@ -136,16 +166,17 @@ export class Analyzer {
       ['ERC', Boolean(p.schematic) && config.checks.erc.enabled],
       ['DRC', Boolean(p.board) && config.checks.drc.enabled],
       ['BOM', Boolean(p.schematic) && config.checks.bom.enabled],
-      ['Render', config.outputs.svg],
-      ['Exports', Boolean(p.board) && (config.outputs.glb || config.outputs.step || config.outputs.gerbers)],
+      ['Render', config.outputs.svg || (Boolean(p.board) && config.outputs.render3d)],
+      ['Exports', hasExports(p, config)],
     ];
     for (const p of projects) {
       for (const [name, enabled] of plan(p)) {
-        await this.setCheck(job, name, p.path, enabled ? 'queued' : 'completed', enabled ? undefined : { conclusion: 'skipped', summary: 'Not applicable or disabled in .pcbhub.yml' });
+        await this.setCheck(job, name, p.path, enabled ? 'queued' : 'completed', enabled ? undefined : { conclusion: 'skipped', summary: 'Not applicable or disabled in .jumper.yml' });
       }
     }
 
-    const work = await mkdtemp(join(tmpdir(), 'pcbhub-job-'));
+    await mkdir(env.tmpDir, { recursive: true });
+    const work = await mkdtemp(join(env.tmpDir, 'jumper-job-'));
     await chmod(work, 0o755);
     try {
       await git.checkout(repo, job.sha, join(work, 'src'), env.WORKER_MAX_CHECKOUT_BYTES);
@@ -156,6 +187,11 @@ export class Analyzer {
         const out = join(work, 'out', String(i));
         await mkdir(out, { recursive: true, mode: 0o777 });
         await chmod(out, 0o777);
+        const models = p.board && version ? await this.prepareBoard(p, work, files.map((f) => f.path)) : null;
+        const libraries = await this.libraries(job, p, work, files.map((f) => f.path), models?.missing ?? []).catch((e) => {
+          log.warn('library report failed', { ...job, project: p.path, error: String(e) });
+          return null;
+        });
         for (const [name, enabled] of plan(p)) {
           if (!enabled) continue;
           await this.setCheck(job, name, p.path, 'in_progress');
@@ -163,8 +199,15 @@ export class Analyzer {
           try {
             if (Date.now() > deadline) throw new Deadline();
             result = await this.step(name, job, p, config, work, out, version);
+            if (models && (name === 'Exports' || name === 'Render') && result.details) result.details.models = models;
+            if (libraries && (name === 'ERC' || name === 'DRC')) {
+              const relevant = name === 'ERC' ? { ...libraries, footprints: [], missingModels: [] } : { ...libraries, symbols: [], missingSheets: [] };
+              const line = librarySummary(relevant);
+              result.details = { ...(result.details ?? {}), libraries: relevant };
+              if (line) result.summary = `${result.summary} · ${line}`;
+            }
             if (name === 'Render' && configError) {
-              result.summary += ` (.pcbhub.yml ignored: ${configError})`;
+              result.summary += ` (.jumper.yml ignored: ${configError})`;
             }
           } catch (e) {
             if (e instanceof Deadline) result = { conclusion: 'timed_out', summary: 'Analysis exceeded the job time limit' };
@@ -190,7 +233,7 @@ export class Analyzer {
     }
   }
 
-  private step(name: CheckName, job: AnalyzeCommitJob, p: Project, config: PcbhubConfig, work: string, out: string, version: string | null): Promise<StepResult> {
+  private step(name: CheckName, job: AnalyzeCommitJob, p: Project, config: JumperConfig, work: string, out: string, version: string | null): Promise<StepResult> {
     switch (name) {
       case 'ERC':
         return this.erc(job, p, config, work, out, version);
@@ -199,10 +242,68 @@ export class Analyzer {
       case 'BOM':
         return this.bom(job, p, config, work, out);
       case 'Render':
-        return this.render(job, p, work, out, version);
+        return this.render(job, p, config, work, out, version);
       case 'Exports':
         return this.exports(job, p, config, work, out, version);
     }
+  }
+
+  /**
+   * Point footprint 3D models at the worker's KiCad library so GLB/STEP/renders
+   * include component bodies. Only the scratch checkout is modified.
+   */
+  private async prepareBoard(p: Project, work: string, repoFiles: string[]): Promise<{ resolved: number; missing: string[] } | null> {
+    const index = await this.cli.models();
+    if (!index) return null;
+    const file = join(work, 'src', p.board!);
+    const text = await readFile(file, 'utf8').catch(() => null);
+    if (!text) return null;
+    const prefix = p.dir ? `${p.dir}/` : '';
+    const projectFiles = new Set(repoFiles.filter((f) => f.startsWith(prefix)).map((f) => f.slice(prefix.length)));
+    const r = fixModelPaths(text, index, projectFiles);
+    if (r.fixed) await writeFile(file, r.text);
+    return { resolved: r.fixed, missing: r.missing.slice(0, 50) };
+  }
+
+  /**
+   * Libraries the project uses and which of them a fresh clone cannot find. Stored as an artifact and shown on the ERC
+   * and DRC results, so "works on my machine" libraries are caught at the first push.
+   */
+  private async libraries(job: AnalyzeCommitJob, p: Project, work: string, repoFiles: string[], missingModels: string[]): Promise<LibraryReport | null> {
+    if (!p.schematic && !p.board) return null;
+    const read = (path: string) => readFile(join(work, 'src', path), 'utf8').catch(() => null);
+    const schematics: { path: string; text: string }[] = [];
+    if (p.schematic) {
+      const seen = new Set<string>();
+      const queue = [p.schematic];
+      while (queue.length && seen.size < 200) {
+        const path = queue.shift()!;
+        if (seen.has(path)) continue;
+        seen.add(path);
+        const text = await read(path);
+        if (!text) continue;
+        schematics.push({ path, text });
+        const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : '';
+        for (const f of sheetFiles(text)) queue.push(`${dir}${f}`.replace(/\/\.\//g, '/'));
+      }
+    }
+    const prefix = p.dir ? `${p.dir}/` : '';
+    const std = await this.cli.standardLibraries();
+    const report = libraryReport({
+      projectDir: p.dir,
+      schematics,
+      board: p.board ? await read(p.board) : null,
+      symLibTable: await read(`${prefix}sym-lib-table`),
+      fpLibTable: await read(`${prefix}fp-lib-table`),
+      repoFiles: new Set(repoFiles),
+      standardSymbols: std.symbols,
+      standardFootprints: std.footprints,
+      missingModels,
+    });
+    const file = join(work, 'out', `libraries-${Buffer.from(p.path).toString('hex').slice(0, 32)}.json`);
+    await writeFile(file, JSON.stringify(report, null, 2));
+    await this.addArtifact(job, p.path, 'library_report', 'libraries.json', file, { problems: report.problems });
+    return report;
   }
 
   private noCli(): StepResult {
@@ -213,7 +314,7 @@ export class Analyzer {
     return relative(work, abs);
   }
 
-  private async erc(job: AnalyzeCommitJob, p: Project, config: PcbhubConfig, work: string, out: string, version: string | null): Promise<StepResult> {
+  private async erc(job: AnalyzeCommitJob, p: Project, config: JumperConfig, work: string, out: string, version: string | null): Promise<StepResult> {
     if (!version) return this.noCli();
     const report = join(out, 'erc.json');
     const r = await this.cli.exec(['sch', 'erc', '--format', 'json', '--severity-all', '--units', 'mm', '-o', this.rel(work, report), `src/${p.schematic}`], work);
@@ -224,7 +325,7 @@ export class Analyzer {
     return { conclusion: ev.conclusion, summary: ev.summary, details: { counts: ev.counts, annotations: ev.annotations, file: p.schematic, kicadVersion: version } };
   }
 
-  private async drc(job: AnalyzeCommitJob, p: Project, config: PcbhubConfig, work: string, out: string, version: string | null): Promise<StepResult> {
+  private async drc(job: AnalyzeCommitJob, p: Project, config: JumperConfig, work: string, out: string, version: string | null): Promise<StepResult> {
     if (!version) return this.noCli();
     const report = join(out, 'drc.json');
     const args = ['pcb', 'drc', '--format', 'json', '--severity-all', '--units', 'mm', '-o', this.rel(work, report)];
@@ -259,7 +360,7 @@ export class Analyzer {
     return texts;
   }
 
-  private async bom(job: AnalyzeCommitJob, p: Project, config: PcbhubConfig, work: string, out: string): Promise<StepResult> {
+  private async bom(job: AnalyzeCommitJob, p: Project, config: JumperConfig, work: string, out: string): Promise<StepResult> {
     const fromDisk = (path: string) => readFile(join(work, 'src', path), 'utf8').catch(() => null);
     const sheets = await this.sheets(fromDisk, p.schematic!);
     const lines = this.deps.kicad.bom(sheets);
@@ -290,10 +391,37 @@ export class Analyzer {
     return { conclusion: 'success', summary: changes.length ? `${summary}; ${changes.length} line(s) changed since parent` : summary, details: { lines: lines.length, parts, changes } };
   }
 
-  private async render(job: AnalyzeCommitJob, p: Project, work: string, out: string, version: string | null): Promise<StepResult> {
+  private async render(job: AnalyzeCommitJob, p: Project, config: JumperConfig, work: string, out: string, version: string | null): Promise<StepResult> {
     if (!version) return { conclusion: 'neutral', summary: 'kicad-cli unavailable; the interactive viewer still works' };
     const produced: string[] = [];
     const failures: string[] = [];
+
+    if (p.board && config.outputs.render3d && (await this.cli.major(work)) >= 9) {
+      const dir = join(out, 'render3d');
+      await mkdir(dir, { recursive: true, mode: 0o777 });
+      await chmod(dir, 0o777);
+      const shots: { name: string; args: string[] }[] = [
+        { name: 'top', args: ['--side', 'top'] },
+        { name: 'bottom', args: ['--side', 'bottom'] },
+        { name: 'iso-top', args: ['--side', 'top', '--rotate', '-35,0,-25', '--perspective', '--zoom', '0.9'] },
+        { name: 'iso-bottom', args: ['--side', 'bottom', '--rotate', '-35,0,25', '--perspective', '--zoom', '0.9'] },
+      ];
+      for (const [order, shot] of shots.entries()) {
+        const target = join(dir, `${shot.name}.png`);
+        const r = await this.cli.exec(
+          ['pcb', 'render', ...shot.args, '--quality', config.outputs.render_quality, '--background', 'opaque', '-w', '1600', '-h', '1000', '-o', this.rel(work, target), `src/${p.board}`],
+          work,
+        );
+        if (await stat(target).then((st) => st.size > 0, () => false)) {
+          await this.addArtifact(job, p.path, 'render3d', `${shot.name}.png`, target, { view: shot.name, order });
+          produced.push(`3D ${shot.name}`);
+        } else failures.push(`3D ${shot.name} (${describeFailure(r)})`);
+      }
+    }
+    if (!config.outputs.svg) {
+      const conclusion: CheckConclusion = failures.length === 0 ? 'success' : produced.length ? 'neutral' : 'failure';
+      return { conclusion, summary: `${produced.length} view${produced.length === 1 ? '' : 's'} rendered${failures.length ? `, ${failures.length} failed` : ''}`, details: { produced, failures, kicadVersion: version } };
+    }
 
     if (p.schematic) {
       const dir = join(out, 'sch');
@@ -351,52 +479,139 @@ export class Analyzer {
     return { conclusion, summary, details: { produced, failures, kicadVersion: version } };
   }
 
-  private async exports(job: AnalyzeCommitJob, p: Project, config: PcbhubConfig, work: string, out: string, version: string | null): Promise<StepResult> {
+  private async exports(job: AnalyzeCommitJob, p: Project, config: JumperConfig, work: string, out: string, version: string | null): Promise<StepResult> {
     if (!version) return this.noCli();
-    const board = `src/${p.board}`;
+    const o = config.outputs;
+    const board = p.board ? `src/${p.board}` : null;
+    const sch = p.schematic ? `src/${p.schematic}` : null;
     const done: string[] = [];
     const failed: string[] = [];
-
-    if (config.outputs.glb) {
-      const target = join(out, 'board.glb');
-      const r = await this.cli.exec(['pcb', 'export', 'glb', '--subst-models', '-f', '-o', this.rel(work, target), board], work);
-      if (await stat(target).then((s) => s.size > 0, () => false)) {
-        await this.addArtifact(job, p.path, 'glb', 'board.glb', target);
-        done.push('GLB');
-      } else failed.push(`GLB (${describeFailure(r)})`);
-    }
-    if (config.outputs.step) {
-      const target = join(out, 'board.step');
-      const r = await this.cli.exec(['pcb', 'export', 'step', '--subst-models', '-f', '-o', this.rel(work, target), board], work);
-      if (await stat(target).then((s) => s.size > 0, () => false)) {
-        await this.addArtifact(job, p.path, 'step', 'board.step', target);
-        done.push('STEP');
-      } else failed.push(`STEP (${describeFailure(r)})`);
-    }
-    if (config.outputs.gerbers) {
-      const dir = join(out, 'gerbers');
+    const exists = (f: string) => stat(f).then((st) => st.isFile() && st.size > 0, () => false);
+    const mkdirOut = async (name: string) => {
+      const dir = join(out, name);
       await mkdir(dir, { recursive: true, mode: 0o777 });
       await chmod(dir, 0o777);
+      return dir;
+    };
+    /** Run one kicad-cli export that writes a single file. */
+    const single = async (label: string, kind: ArtifactKind, file: string, args: string[], meta: Record<string, unknown> = {}) => {
+      const target = join(out, file);
+      const r = await this.cli.exec([...args.slice(0, -1), '-o', this.rel(work, target), args[args.length - 1]!], work);
+      if (await exists(target)) {
+        await this.addArtifact(job, p.path, kind, file, target, meta);
+        done.push(label);
+        return target;
+      }
+      failed.push(`${label} (${describeFailure(r)})`);
+      return null;
+    };
+
+    if (board && o.glb) await single('GLB', 'glb', 'board.glb', ['pcb', 'export', 'glb', '--subst-models', '--include-tracks', '--include-pads', '--include-zones', '--include-silkscreen', '--include-soldermask', '-f', board]);
+    if (board && o.step) await single('STEP', 'step', 'board.step', ['pcb', 'export', 'step', '--subst-models', '-f', board]);
+
+    let gerberDir: string | null = null;
+    let gerberNames: string[] = [];
+    if (board && (o.gerbers || o.fab_package.length > 0)) {
+      const dir = await mkdirOut('gerbers');
       const g = await this.cli.exec(['pcb', 'export', 'gerbers', '-o', `${this.rel(work, dir)}/`, board], work);
-      const d = await this.cli.exec(['pcb', 'export', 'drill', '-o', `${this.rel(work, dir)}/`, board], work);
-      const names = (await readdir(dir).catch(() => [])).sort();
-      if (names.length) {
-        const zipFile = join(out, 'gerbers.zip');
-        await zipDir(dir, names, zipFile);
-        await this.addArtifact(job, p.path, 'gerbers', 'gerbers.zip', zipFile, { files: names });
-        done.push('Gerbers');
+      const d = await this.cli.exec(['pcb', 'export', 'drill', '--format', 'excellon', '--excellon-separate-th', '--generate-map', '--map-format', 'gerberx2', '-o', `${this.rel(work, dir)}/`, board], work);
+      gerberNames = (await readdir(dir).catch(() => [])).filter(isFabFile).sort();
+      if (gerberNames.length) {
+        gerberDir = dir;
+        if (o.gerbers) {
+          const zipFile = join(out, 'gerbers.zip');
+          await zipFiles(gerberNames.map((n) => [join(dir, n), n]), zipFile);
+          await this.addArtifact(job, p.path, 'gerbers', 'gerbers.zip', zipFile, { files: gerberNames });
+          done.push('Gerbers');
+        }
       } else failed.push(`Gerbers (${describeFailure(g.code === 0 ? d : g)})`);
     }
 
+    let posFile: string | null = null;
+    if (board && (o.pos || o.fab_package.length > 0)) {
+      posFile = o.pos
+        ? await single('Pick-and-place', 'pos', 'positions.csv', ['pcb', 'export', 'pos', '--format', 'csv', '--units', 'mm', '--side', 'both', '--exclude-dnp', board])
+        : await (async () => {
+            const target = join(out, 'positions.csv');
+            await this.cli.exec(['pcb', 'export', 'pos', '--format', 'csv', '--units', 'mm', '--side', 'both', '--exclude-dnp', '-o', this.rel(work, target), board], work);
+            return (await exists(target)) ? target : null;
+          })();
+    }
+
+    if (o.pdf) {
+      if (sch) await single('Schematic PDF', 'pdf', 'schematic.pdf', ['sch', 'export', 'pdf', sch], { source: 'schematic' });
+      if (board && (await this.cli.major(work)) < 9) {
+        await single('Board PDF', 'pdf', 'board.pdf', ['pcb', 'export', 'pdf', '--layers', 'F.Cu,B.Cu,F.SilkS,B.SilkS,F.Mask,B.Mask,Edge.Cuts', board], { source: 'board' });
+      } else if (board) {
+        // Multi-page mode treats -o as a directory and names the file after the board.
+        const dir = await mkdirOut('board-pdf');
+        const layers = 'F.Cu,B.Cu,F.SilkS,B.SilkS,F.Mask,B.Mask,Edge.Cuts,F.Fab,B.Fab';
+        const r = await this.cli.exec(['pcb', 'export', 'pdf', '--layers', layers, '--mode-multipage', '--include-border-title', '-o', `${this.rel(work, dir)}/`, board], work);
+        const pdf = (await readdir(dir).catch(() => [])).find((f) => f.endsWith('.pdf'));
+        if (pdf) {
+          await this.addArtifact(job, p.path, 'pdf', 'board.pdf', join(dir, pdf), { source: 'board' });
+          done.push('Board PDF');
+        } else failed.push(`Board PDF (${describeFailure(r)})`);
+      }
+    }
+    if (sch && o.netlist) await single('Netlist', 'netlist', 'netlist.net', ['sch', 'export', 'netlist', '--format', 'kicadsexpr', sch]);
+    if (board && o.ipc2581) await single('IPC-2581', 'ipc2581', 'board-ipc2581.xml', ['pcb', 'export', 'ipc2581', '--units', 'mm', board]);
+    if (board && o.odb) await single('ODB++', 'odb', 'board-odb.zip', ['pcb', 'export', 'odb', '--compression', 'zip', board]);
+
+    if (board && o.fab_package.length > 0 && gerberDir) {
+      let lines: BomLine[] | null = null;
+      const nonParts = new Set<string>();
+      if (p.schematic) {
+        const sheets = await this.sheets((path) => readFile(join(work, 'src', path), 'utf8').catch(() => null), p.schematic);
+        try {
+          lines = this.deps.kicad.bom(sheets);
+          for (const l of lines) if (isNonPart(l)) for (const r of l.references) nonParts.add(r);
+        } catch (e) {
+          failed.push(`Fab BOM (${(e as Error).message})`);
+        }
+      }
+      const posCsv = posFile ? await readFile(posFile, 'utf8') : null;
+      // One zip per fab house, each laid out the way that fab's upload form expects.
+      for (const format of o.fab_package) {
+        const layout = FAB_LAYOUTS[format];
+        const entries: [string, string][] = gerberNames.map((n) => [join(gerberDir!, n), `${layout.gerberDir}${n}`]);
+        const extra: string[] = [];
+        if (lines && layout.bom) {
+          const bomFile = join(out, `fab-bom-${format}.csv`);
+          await writeFile(bomFile, layout.bom.build(lines));
+          entries.push([bomFile, layout.bom.name]);
+          extra.push('BOM');
+        }
+        if (posCsv && layout.cpl) {
+          const cpl = join(out, `fab-cpl-${format}.csv`);
+          await writeFile(cpl, layout.cpl.build(posCsv, nonParts));
+          entries.push([cpl, layout.cpl.name]);
+          extra.push('CPL');
+        }
+        const zipFile = join(out, `fab-${format}.zip`);
+        const name = `${p.name}-${format}-${job.sha.slice(0, 7)}.zip`;
+        await zipFiles(entries, zipFile);
+        await this.addArtifact(job, p.path, 'fab_package', name, zipFile, { format, files: entries.map(([, n]) => n) });
+        done.push(`${FAB_PACKAGE_LABELS[format]} package${extra.length ? ` (gerbers + ${extra.join(' + ')})` : ''}`);
+      }
+    }
+
     const conclusion: CheckConclusion = failed.length === 0 ? 'success' : done.length ? 'neutral' : 'failure';
-    return { conclusion, summary: done.length ? `Generated ${done.join(', ')}${failed.length ? `; failed: ${failed.length}` : ''}` : 'No outputs generated', details: { done, failed } };
+    return { conclusion, summary: done.length ? `Generated ${done.join(', ')}${failed.length ? `; failed: ${failed.length}` : ''}` : 'No outputs generated', details: { done, failed, kicadVersion: version } };
   }
 }
 
-function zipDir(dir: string, names: string[], target: string): Promise<void> {
+function hasExports(p: Project, config: JumperConfig): boolean {
+  const o = config.outputs;
+  const boardOut = o.glb || o.step || o.gerbers || o.pos || o.pdf || o.ipc2581 || o.odb || o.fab_package.length > 0;
+  const schOut = o.pdf || o.netlist;
+  return (Boolean(p.board) && boardOut) || (Boolean(p.schematic) && schOut);
+}
+
+function zipFiles(entries: [string, string][], target: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const zip = new yazl.ZipFile();
-    for (const n of names) zip.addFile(join(dir, n), n);
+    for (const [file, name] of entries) zip.addFile(file, name);
     zip.outputStream.pipe(createWriteStream(target)).on('close', () => resolve()).on('error', reject);
     zip.end();
   });
