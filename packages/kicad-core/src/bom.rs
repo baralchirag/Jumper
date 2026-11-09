@@ -7,7 +7,22 @@ use serde::{Deserialize, Serialize};
 use crate::sch::Schematic;
 
 /// Symbol fields copied into BOM lines when present.
-const EXTRA_FIELDS: &[&str] = &["MPN", "Manufacturer", "Manufacturer_Part_Number", "LCSC", "Supplier", "Supplier_PN", "Description"];
+const EXTRA_FIELDS: &[&str] = &["MPN", "Manufacturer", "Manufacturer_Part_Number", "Manufacturer_Name", "LCSC", "Supplier", "Supplier_PN", "Description", "Datasheet"];
+
+/// Sourcing fields recognised by name fragment (case-insensitive), e.g. "Mouser Part Number", "LCSC Part #".
+const SOURCING_HINTS: &[&str] = &["part number", "part #", "part_number", "partnumber", "mpn", "lcsc", "jlc", "digikey", "digi-key", "mouser", "manufacturer"];
+
+fn is_bom_field(key: &str) -> bool {
+    if EXTRA_FIELDS.contains(&key) {
+        return true;
+    }
+    let k = key.to_ascii_lowercase();
+    // Price/stock snapshots copied from vendor tools go stale; leave them out.
+    if k.contains("price") || k.contains("stock") {
+        return false;
+    }
+    SOURCING_HINTS.iter().any(|h| k.contains(h))
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -55,7 +70,7 @@ pub fn bom(sheets: &[Schematic]) -> Vec<BomLine> {
             let fields: BTreeMap<String, String> = s
                 .properties
                 .iter()
-                .filter(|p| EXTRA_FIELDS.contains(&p.key.as_str()) && !p.value.is_empty() && p.value != "~")
+                .filter(|p| is_bom_field(&p.key) && !p.value.is_empty() && p.value != "~")
                 .map(|p| (p.key.clone(), p.value.clone()))
                 .collect();
             let line = BomLine {

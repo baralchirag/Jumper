@@ -11,7 +11,7 @@ let instance: KicadCore | null = null;
 export function kicadCore(): KicadCore {
   if (!instance) {
     // Resolved through the package name so it also works after bundling.
-    const raw = require('@pcbhub/kicad-core/pkg-node/kicad_core.js') as RawBindings;
+    const raw = require('@jumper/kicad-core/pkg-node/kicad_core.js') as RawBindings;
     instance = wrapBindings(raw);
   }
   return instance;

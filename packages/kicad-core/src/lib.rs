@@ -1,4 +1,4 @@
-//! PCBHub KiCad core: parsing, semantic diff and BOM for KiCad 6+ files.
+//! Jumper KiCad core: parsing, semantic diff and BOM for KiCad 6+ files.
 //!
 //! The same code is compiled natively (CLI used by workers) and to
 //! WebAssembly (browser viewer and Node API).
