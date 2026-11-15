@@ -1,6 +1,6 @@
-import { createReadStream, createWriteStream } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import { mkdir, rm, stat } from 'node:fs/promises';
-import { dirname, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import {
@@ -179,7 +179,22 @@ export function createStorage(env: NodeJS.ProcessEnv = process.env): Storage {
       secretAccessKey: env.S3_SECRET_KEY ?? '',
     });
   }
-  return new FsStorage(env.STORAGE_FS_ROOT ?? './data/artifacts');
+  return new FsStorage(resolveFromWorkspace(env.STORAGE_FS_ROOT ?? './data/artifacts'));
+}
+
+/**
+ * Relative roots resolve against the monorepo root (like REPOS_DIR), so the api
+ * and worker share one directory regardless of their working directory.
+ */
+export function resolveFromWorkspace(p: string): string {
+  if (isAbsolute(p)) return p;
+  let dir = process.cwd();
+  for (;;) {
+    if (existsSync(join(dir, 'pnpm-workspace.yaml'))) return resolve(dir, p);
+    const parent = dirname(dir);
+    if (parent === dir) return resolve(process.cwd(), p);
+    dir = parent;
+  }
 }
 
 const TYPES: Record<string, string> = {
@@ -192,6 +207,15 @@ const TYPES: Record<string, string> = {
   stp: 'model/step',
   zip: 'application/zip',
   txt: 'text/plain; charset=utf-8',
+  pdf: 'application/pdf',
+  xml: 'application/xml; charset=utf-8',
+  net: 'text/plain; charset=utf-8',
+  rpt: 'text/plain; charset=utf-8',
+  drl: 'text/plain; charset=utf-8',
+  gbr: 'text/plain; charset=utf-8',
+  gbrjob: 'application/json',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
 };
 
 export function contentTypeFor(name: string): string {

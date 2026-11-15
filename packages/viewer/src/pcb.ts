@@ -1,5 +1,5 @@
 import { Container, Graphics, Text } from 'pixi.js';
-import type { BBox, Footprint, Graphic, Pad, Pcb, PcbText, Pt, Track } from '@pcbhub/kicad-core/types';
+import type { BBox, Footprint, Graphic, Pad, Pcb, PcbText, Pt, Track } from '@jumper/kicad-core/types';
 import { HOLE_COLOR, HIGHLIGHT_COLOR, PCB_BACKGROUND, PCB_LAYER_ALPHA, VIA_COLOR, copperOrder, pcbDrawOrder, pcbLayerColor } from './colors';
 import { arcPoints, bboxOf, distToSegment, flatten, inBBox, padOutline, pointInPolygon, rotate } from './geometry';
 import { Stage, type Marker, type ViewState } from './stage';

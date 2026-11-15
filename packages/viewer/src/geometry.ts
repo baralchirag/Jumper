@@ -1,4 +1,4 @@
-import type { BBox, Pt } from '@pcbhub/kicad-core/types';
+import type { BBox, Pt } from '@jumper/kicad-core/types';
 
 export const DEG = Math.PI / 180;
 

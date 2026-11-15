@@ -1,5 +1,5 @@
 import { Container, Graphics, Text } from 'pixi.js';
-import type { BBox, Label, LibSymbol, Pt, SchGraphic, SchSymbol, Schematic } from '@pcbhub/kicad-core/types';
+import type { BBox, Label, LibSymbol, Pt, SchGraphic, SchSymbol, Schematic } from '@jumper/kicad-core/types';
 import { SCH } from './colors';
 import { arcPoints, bboxOf, distToSegment, flatten, inBBox, unionBBox, DEG } from './geometry';
 import { Stage, type Marker, type ViewState } from './stage';

@@ -5,7 +5,7 @@ import { text } from 'node:stream/consumers';
 import { afterAll, describe, expect, it } from 'vitest';
 import { FsStorage, artifactKey } from './index';
 
-const dir = await mkdtemp(join(tmpdir(), 'pcbhub-storage-'));
+const dir = await mkdtemp(join(tmpdir(), 'jumper-storage-'));
 afterAll(() => rm(dir, { recursive: true, force: true }));
 
 describe('FsStorage', () => {

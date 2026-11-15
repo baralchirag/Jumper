@@ -30,16 +30,16 @@ export function Dialog({
       onClose={onClose}
       onCancel={onClose}
       style={{ width }}
-      className="m-auto max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-canvas-overlay p-0 text-fg shadow-overlay backdrop:bg-black/40"
+      className="m-auto max-w-[calc(100vw-2rem)] overflow-visible rounded-lg border border-border bg-canvas-overlay p-0 text-fg shadow-overlay backdrop:bg-black/55 backdrop:backdrop-blur-[2px] open:animate-[pop-enter_220ms_var(--ease-route)_both]"
     >
       {open && (
         <>
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <h2 className="text-base font-semibold">{title}</h2>
+          <div className="flex items-center justify-between border-b border-border px-6 py-4">
+            <h2 className="text-base font-medium tracking-tight">{title}</h2>
             <IconButton label="Close" icon={<X size={16} />} size="sm" onClick={onClose} />
           </div>
-          <div className="px-4 py-4">{children}</div>
-          {footer && <div className="flex justify-end gap-2 border-t border-border px-4 py-3">{footer}</div>}
+          <div className="px-6 py-6">{children}</div>
+          {footer && <div className="flex justify-end gap-2 border-t border-border bg-canvas-subtle px-6 py-4">{footer}</div>}
         </>
       )}
     </dialog>

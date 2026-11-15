@@ -50,7 +50,7 @@ export class Viewer3D {
     private readonly el: HTMLElement,
     private readonly opts: Viewer3DOptions = {},
   ) {
-    this.renderer = new WebGLRenderer({ antialias: true, alpha: true });
+    this.renderer = new WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(el.clientWidth, el.clientHeight);
     el.appendChild(this.renderer.domElement);
@@ -59,7 +59,18 @@ export class Viewer3D {
     this.camera = this.makeCamera(false);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.12;
     this.controls.screenSpacePanning = true;
+    this.controls.rotateSpeed = 0.9;
+    this.controls.zoomToCursor = true;
+    this.controls.autoRotateSpeed = 1.5;
+    // Any interaction stops the turntable.
+    this.controls.addEventListener('start', () => {
+      if (this.controls.autoRotate) {
+        this.controls.autoRotate = false;
+        this.onAutoRotateChange?.(false);
+      }
+    });
 
     this.scene.add(new HemisphereLight(0xffffff, 0x404040, 1.2));
     this.scene.add(new AmbientLight(0xffffff, 0.35));
@@ -119,6 +130,48 @@ export class Viewer3D {
     this.up = axis === 'y' ? new Vector3(0, 0, -1) : new Vector3(0, 1, 0);
     if (axis === 'z') this.up = new Vector3(0, 1, 0);
     this.setView('iso');
+  }
+
+  /** Called when interaction stops the turntable. */
+  onAutoRotateChange: ((on: boolean) => void) | null = null;
+
+  /** Show an already-built object (e.g. the procedural board). */
+  loadObject(obj: Object3D, keepView = false): void {
+    const dir = keepView && this.model ? this.camera.position.clone().sub(this.controls.target).normalize() : null;
+    const up = this.camera.up.clone();
+    this.setModel(obj);
+    if (dir) {
+      this.camera.up.copy(up);
+      this.fitCamera(dir);
+    }
+  }
+
+  setAutoRotate(on: boolean): void {
+    this.controls.autoRotate = on;
+  }
+
+  /** Turn the board over (rotate 180° about the camera's up axis). */
+  flip(): void {
+    const target = this.controls.target.clone();
+    const offset = this.camera.position.clone().sub(target);
+    const axis = this.camera.up.clone().normalize();
+    offset.applyAxisAngle(axis, Math.PI);
+    this.camera.position.copy(target.clone().add(offset));
+    this.camera.lookAt(target);
+    this.controls.update();
+  }
+
+  /** Toggle a named child of the model (e.g. "components"). */
+  setVisible(name: string, visible: boolean): void {
+    this.model?.traverse((o) => {
+      if (o.name === name) o.visible = visible;
+    });
+  }
+
+  /** PNG data URL of the current view. */
+  screenshot(): string {
+    this.renderer.render(this.scene, this.camera);
+    return this.renderer.domElement.toDataURL('image/png');
   }
 
   async loadGlb(source: string | ArrayBuffer): Promise<void> {

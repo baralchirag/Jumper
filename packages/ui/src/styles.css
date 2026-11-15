@@ -1,81 +1,105 @@
 /*
- * PCBHub design tokens. Neutral grayscale with a single copper accent;
- * intentionally no blues or purples. Light and dark themes, WCAG AA text contrast.
+ * Jumper design tokens: the landing page's world, used everywhere.
+ * Light is flat neutral paper, dark is graphite; carbon ink; one signal-yellow accent that only ever fills
+ * (buttons, rails, selection) with dark text on it, and a dark amber for accent-coloured text on paper.
+ * Solder-mask green stays reserved for "pass". Hairlines over shadows.
+ * Fonts come from @fontsource-variable (imported in apps/web/src/main.tsx).
  */
-:root {
+
+/* Light: paper. */
+:root,
+[data-theme='light'] {
   color-scheme: light;
-  --pcb-canvas: #ffffff;
-  --pcb-canvas-subtle: #f6f7f6;
-  --pcb-canvas-inset: #eef0ee;
-  --pcb-canvas-overlay: #ffffff;
-  --pcb-border: #d3d7d4;
-  --pcb-border-muted: #e3e6e3;
-  --pcb-fg: #1c201e;
-  --pcb-fg-muted: #565d59;
-  --pcb-fg-subtle: #6f7672;
+  --pcb-page: #f1f2ef;
+  --pcb-canvas: #f8f8f6;
+  --pcb-canvas-subtle: #ebece8;
+  --pcb-canvas-inset: #e5e6e2;
+  --pcb-canvas-overlay: #fbfbfa;
+  --pcb-border: #d6d8d3;
+  --pcb-border-muted: #e2e3df;
+  --pcb-fg: #121314;
+  --pcb-fg-muted: #55585c;
+  --pcb-fg-subtle: #5f6266;
   --pcb-fg-on-emphasis: #ffffff;
-  --pcb-accent: #a4521f;
-  --pcb-accent-emphasis: #b85d24;
-  --pcb-accent-muted: rgba(184, 93, 36, 0.35);
-  --pcb-accent-subtle: #fbf1ea;
-  --pcb-success: #1b7a3b;
-  --pcb-success-emphasis: #1d7f3e;
-  --pcb-success-subtle: #e9f5ec;
-  --pcb-danger: #b42821;
-  --pcb-danger-emphasis: #c8312a;
-  --pcb-danger-subtle: #fdeceb;
-  --pcb-attention: #8a5d00;
-  --pcb-attention-subtle: #fdf5e1;
-  --pcb-done: #8a4513;
-  --pcb-done-subtle: #f8ede4;
-  --pcb-neutral-muted: rgba(120, 128, 124, 0.2);
-  --pcb-diff-add-bg: #e6f4ea;
-  --pcb-diff-add-num: #cdebd5;
-  --pcb-diff-del-bg: #fbeaea;
-  --pcb-diff-del-num: #f6d3d2;
-  --pcb-diff-hunk: #f1f2f1;
-  --pcb-shadow: 0 1px 0 rgba(28, 32, 30, 0.04);
-  --pcb-shadow-overlay: 0 8px 24px rgba(28, 32, 30, 0.14);
-  --pcb-header-bg: #1c201e;
-  --pcb-header-fg: #f1f3f2;
+  --pcb-fg-on-accent: #121314;
+  --pcb-accent: #7a5800;
+  --pcb-accent-emphasis: #ffd60a;
+  --pcb-accent-muted: rgba(214, 170, 0, 0.45);
+  --pcb-accent-subtle: rgba(255, 214, 10, 0.18);
+  --pcb-success: #2a6a44;
+  --pcb-success-emphasis: #1f5c39;
+  --pcb-success-subtle: rgba(42, 106, 68, 0.1);
+  --pcb-danger: #b0281f;
+  --pcb-danger-emphasis: #c02c22;
+  --pcb-danger-subtle: rgba(192, 44, 34, 0.08);
+  --pcb-attention: #835807;
+  --pcb-attention-subtle: rgba(196, 140, 20, 0.13);
+  --pcb-done: #6b4a8c;
+  --pcb-done-subtle: rgba(107, 74, 140, 0.1);
+  --pcb-neutral-muted: rgba(18, 19, 20, 0.06);
+  --pcb-diff-add-bg: rgba(42, 106, 68, 0.1);
+  --pcb-diff-add-num: rgba(42, 106, 68, 0.18);
+  --pcb-diff-del-bg: rgba(192, 44, 34, 0.08);
+  --pcb-diff-del-num: rgba(192, 44, 34, 0.15);
+  --pcb-diff-hunk: #e9eae6;
+  --pcb-shadow: none;
+  --pcb-shadow-card: none;
+  --pcb-shadow-lift: 0 10px 28px -16px rgba(18, 19, 20, 0.22);
+  --pcb-shadow-overlay: 0 0 0 1px rgba(18, 19, 20, 0.06), 0 16px 36px -14px rgba(18, 19, 20, 0.22);
+  --pcb-header-bg: #f1f2ef;
+  --pcb-header-fg: #121314;
+  --pcb-grid-line: rgba(18, 19, 20, 0.05);
+  --pcb-trace: #121314;
+  --pcb-focus: #121314;
+  --pcb-select: #121314;
 }
 
-:root[data-theme='dark'] {
+/* Dark: graphite. */
+:root[data-theme='dark'],
+[data-theme='dark'] {
   color-scheme: dark;
-  --pcb-canvas: #101211;
-  --pcb-canvas-subtle: #161917;
-  --pcb-canvas-inset: #0b0c0c;
-  --pcb-canvas-overlay: #1b1e1c;
-  --pcb-border: #303532;
-  --pcb-border-muted: #242826;
-  --pcb-fg: #e4e7e5;
-  --pcb-fg-muted: #a0a8a3;
-  --pcb-fg-subtle: #858d88;
+  --pcb-page: #101112;
+  --pcb-canvas: #151617;
+  --pcb-canvas-subtle: #1b1c1e;
+  --pcb-canvas-inset: #0b0c0d;
+  --pcb-canvas-overlay: #1c1d1f;
+  --pcb-border: #2a2c2f;
+  --pcb-border-muted: #212326;
+  --pcb-fg: #ecedea;
+  --pcb-fg-muted: #9b9fa4;
+  --pcb-fg-subtle: #878b90;
   --pcb-fg-on-emphasis: #ffffff;
-  --pcb-accent: #e08a53;
-  --pcb-accent-emphasis: #c26a33;
-  --pcb-accent-muted: rgba(224, 138, 83, 0.4);
-  --pcb-accent-subtle: rgba(224, 138, 83, 0.12);
-  --pcb-success: #4cb56c;
-  --pcb-success-emphasis: #238043;
-  --pcb-success-subtle: rgba(76, 181, 108, 0.14);
-  --pcb-danger: #f0726b;
-  --pcb-danger-emphasis: #c93b33;
-  --pcb-danger-subtle: rgba(240, 114, 107, 0.13);
-  --pcb-attention: #d9a43a;
-  --pcb-attention-subtle: rgba(217, 164, 58, 0.14);
-  --pcb-done: #d39363;
-  --pcb-done-subtle: rgba(211, 147, 99, 0.14);
-  --pcb-neutral-muted: rgba(140, 148, 144, 0.22);
-  --pcb-diff-add-bg: rgba(76, 181, 108, 0.12);
-  --pcb-diff-add-num: rgba(76, 181, 108, 0.24);
-  --pcb-diff-del-bg: rgba(240, 114, 107, 0.11);
-  --pcb-diff-del-num: rgba(240, 114, 107, 0.22);
-  --pcb-diff-hunk: #191c1a;
-  --pcb-shadow: 0 0 0 transparent;
-  --pcb-shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5);
-  --pcb-header-bg: #0b0c0c;
-  --pcb-header-fg: #e4e7e5;
+  --pcb-fg-on-accent: #121314;
+  --pcb-accent: #ffd60a;
+  --pcb-accent-emphasis: #ffd60a;
+  --pcb-accent-muted: rgba(255, 214, 10, 0.4);
+  --pcb-accent-subtle: rgba(255, 214, 10, 0.1);
+  --pcb-success: #5cbf7e;
+  --pcb-success-emphasis: #1f5c39;
+  --pcb-success-subtle: rgba(92, 191, 126, 0.11);
+  --pcb-danger: #f07167;
+  --pcb-danger-emphasis: #b8322a;
+  --pcb-danger-subtle: rgba(240, 113, 103, 0.11);
+  --pcb-attention: #e0b23c;
+  --pcb-attention-subtle: rgba(224, 178, 60, 0.12);
+  --pcb-done: #c39bd3;
+  --pcb-done-subtle: rgba(195, 155, 211, 0.12);
+  --pcb-neutral-muted: rgba(236, 237, 234, 0.07);
+  --pcb-diff-add-bg: rgba(92, 191, 126, 0.1);
+  --pcb-diff-add-num: rgba(92, 191, 126, 0.2);
+  --pcb-diff-del-bg: rgba(240, 113, 103, 0.1);
+  --pcb-diff-del-num: rgba(240, 113, 103, 0.2);
+  --pcb-diff-hunk: #191a1c;
+  --pcb-shadow: none;
+  --pcb-shadow-card: none;
+  --pcb-shadow-lift: 0 16px 34px -14px rgba(0, 0, 0, 0.75);
+  --pcb-shadow-overlay: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 24px 48px -16px rgba(0, 0, 0, 0.7);
+  --pcb-header-bg: #101112;
+  --pcb-header-fg: #ecedea;
+  --pcb-grid-line: rgba(236, 237, 234, 0.035);
+  --pcb-trace: #ffd60a;
+  --pcb-focus: #ecedea;
+  --pcb-select: #ffd60a;
 }
 
 @theme inline {
@@ -89,6 +113,7 @@
   --color-fg-muted: var(--pcb-fg-muted);
   --color-fg-subtle: var(--pcb-fg-subtle);
   --color-fg-on-emphasis: var(--pcb-fg-on-emphasis);
+  --color-fg-on-accent: var(--pcb-fg-on-accent);
   --color-accent: var(--pcb-accent);
   --color-accent-emphasis: var(--pcb-accent-emphasis);
   --color-accent-muted: var(--pcb-accent-muted);
@@ -113,80 +138,478 @@
   --color-header-fg: var(--pcb-header-fg);
   --shadow-subtle: var(--pcb-shadow);
   --shadow-overlay: var(--pcb-shadow-overlay);
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --shadow-card: var(--pcb-shadow-card);
+  --shadow-lift: var(--pcb-shadow-lift);
+  --color-page: var(--pcb-page);
+  --color-select: var(--pcb-select);
+  --color-trace: var(--pcb-trace);
+  --font-sans: 'Geist Variable', 'Geist', 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --font-display: 'Geist Variable', 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-title: 'Space Grotesk Variable', 'Space Grotesk', 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  /* Radius rule: precise, small corners. 4px controls, 6px inputs and panels, 8px+ only for large surfaces. */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-2xl: 10px;
+  --radius-3xl: 12px;
+  --ease-route: cubic-bezier(0.2, 0.7, 0, 1);
+  --default-transition-duration: 160ms;
+  --default-transition-timing-function: cubic-bezier(0.2, 0.7, 0, 1);
 }
 
 @layer base {
+  :root {
+    --t-mega: clamp(3.1rem, 0.8rem + 9.2vw, 10.5rem);
+    --t-xl: clamp(2.1rem, 1.3rem + 3.6vw, 4.5rem);
+    --t-l: clamp(1.5rem, 1.2rem + 1.2vw, 2.25rem);
+    --t-m: clamp(1.125rem, 1.05rem + 0.4vw, 1.375rem);
+  }
   html {
     font-family: var(--font-sans);
-    font-size: 14px;
-    line-height: 1.5;
-    background: var(--pcb-canvas);
+    font-size: 15px;
+    line-height: 1.55;
+    background: var(--pcb-page);
     color: var(--pcb-fg);
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scrollbar-color: var(--pcb-border) transparent;
   }
   body {
-    background: var(--pcb-canvas);
+    background: var(--pcb-page);
     min-height: 100vh;
   }
   a {
     color: inherit;
   }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+  /* Page titles share the landing title's face. */
+  h1 {
+    font-family: var(--font-title);
+    letter-spacing: -0.03em;
+  }
+  code,
+  kbd,
+  samp,
+  pre,
+  .font-mono {
+    font-feature-settings: 'zero';
+  }
+  .tabular-nums,
+  time {
+    font-variant-numeric: tabular-nums;
+  }
   :focus-visible {
-    outline: 2px solid var(--pcb-accent-emphasis);
-    outline-offset: 1px;
+    outline: 2px solid var(--pcb-focus);
+    outline-offset: 2px;
   }
   ::selection {
-    background: var(--pcb-accent-muted);
+    background: var(--pcb-accent-emphasis);
+    color: var(--pcb-fg-on-accent);
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--pcb-border);
+    border: 3px solid transparent;
+    background-clip: padding-box;
+    border-radius: 0;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
   }
 }
 
 @layer components {
+  /* ── Links ───────────────────────────────────────── */
   .link {
-    color: var(--pcb-accent);
-    text-decoration: none;
+    color: var(--pcb-fg);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+    transition: text-decoration-color 200ms;
   }
   .link:hover {
-    text-decoration: underline;
+    text-decoration-color: currentColor;
   }
   .link-muted {
     color: var(--pcb-fg-muted);
     text-decoration: none;
+    transition: color 140ms;
   }
   .link-muted:hover {
-    color: var(--pcb-accent);
-    text-decoration: underline;
+    color: var(--pcb-fg);
   }
+
+  /* ── Type roles ─────────────────────────────────── */
+  .display {
+    font-family: var(--font-title);
+    font-weight: 500;
+    letter-spacing: -0.04em;
+    line-height: 0.92;
+    text-wrap: balance;
+  }
+  .headline {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.025em;
+    line-height: 1.05;
+  }
+  h1.headline {
+    font-family: var(--font-title);
+    letter-spacing: -0.035em;
+  }
+  .label-mono {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--pcb-fg-muted);
+  }
+
+  /* ── Drawing sheet textures ─────────────────────── */
+  .sheet-grid {
+    background-image:
+      linear-gradient(var(--pcb-grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--pcb-grid-line) 1px, transparent 1px),
+      linear-gradient(var(--pcb-grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--pcb-grid-line) 1px, transparent 1px);
+    background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+    background-position: -1px -1px;
+  }
+  /* Registration ticks on the four corners of a panel. */
+  .ticks {
+    position: relative;
+  }
+  .ticks::before,
+  .ticks::after {
+    content: '';
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    pointer-events: none;
+    border-color: var(--pcb-fg-subtle);
+    opacity: 0.7;
+  }
+  .ticks::before {
+    top: -1px;
+    left: -1px;
+    border-top: 1px solid;
+    border-left: 1px solid;
+  }
+  .ticks::after {
+    bottom: -1px;
+    right: -1px;
+    border-bottom: 1px solid;
+    border-right: 1px solid;
+  }
+
+  /* ── Row "probe": a rail grows from the left edge on hover ── */
+  .probe {
+    position: relative;
+  }
+  .probe::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--pcb-select);
+    transform: scaleY(0);
+    transform-origin: top;
+    transition: transform 260ms var(--ease-route);
+  }
+  .probe:hover::before,
+  .probe:focus-within::before {
+    transform: scaleY(1);
+  }
+  .probe .probe-shift {
+    transition: translate 260ms var(--ease-route), color 140ms;
+  }
+  .probe:hover .probe-shift {
+    translate: 4px 0;
+  }
+
+  /* ── Button label roll: the label slides up one line ── */
+  .roll {
+    display: inline-grid;
+    overflow: hidden;
+    height: 1.25em;
+    line-height: 1.25em;
+  }
+  .roll > span {
+    grid-area: 1 / 1;
+    transition: translate 320ms var(--ease-route);
+  }
+  .roll > span + span {
+    translate: 0 110%;
+  }
+  :where(a, button):hover .roll > span:first-child {
+    translate: 0 -110%;
+  }
+  :where(a, button):hover .roll > span + span {
+    translate: 0 0;
+  }
+  .arrow-travel {
+    transition: translate 260ms var(--ease-route);
+  }
+  :where(a, button):hover .arrow-travel {
+    translate: 3px -3px;
+  }
+
+  /* ── Motion ─────────────────────────────────────── */
+  .page-enter {
+    animation: page-enter 420ms var(--ease-route) both;
+  }
+  .pop-enter {
+    transform-origin: top;
+    animation: pop-enter 180ms var(--ease-route) both;
+  }
+  input[type='radio'],
+  input[type='checkbox'] {
+    accent-color: var(--pcb-accent-emphasis);
+  }
+  /* Content is always visible; nothing waits for a scroll position to appear. */
+  .reveal {
+    opacity: 1;
+  }
+  /* A grid without explicit columns sizes its one column to the widest child; keep it to the container instead. */
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pulse-dot {
+    animation: pulse-dot 2.4s ease-in-out infinite;
+  }
+
+  /* ── Markdown — GitHub-flavoured, datasheet typography ── */
   .markdown-body {
     font-size: 15px;
-    line-height: 1.6;
+    line-height: 1.65;
     word-wrap: break-word;
+    max-width: 38rem;
+    color: var(--pcb-fg);
   }
-  .markdown-body > :first-child {
-    margin-top: 0;
+  .markdown-body p, .markdown-body li { text-wrap: pretty; }
+  .markdown-body.compact { font-size: 14px; line-height: 1.6; max-width: none; }
+  .markdown-body > :first-child { margin-top: 0 !important; }
+  .markdown-body > :last-child { margin-bottom: 0 !important; }
+  .markdown-body :is(h1, h2, h3, h4, h5, h6) {
+    position: relative;
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    scroll-margin-top: 72px;
   }
-  .markdown-body h1,
-  .markdown-body h2 {
-    border-bottom: 1px solid var(--pcb-border-muted);
-    padding-bottom: 0.3em;
+  .markdown-body h1 { font-size: 2em; margin: 1.4em 0 0.6em; letter-spacing: -0.03em; }
+  .markdown-body h2 { font-size: 1.45em; margin: 1.8em 0 0.6em; padding-bottom: 0.35em; border-bottom: 1px solid var(--pcb-border-muted); }
+  .markdown-body h3 { font-size: 1.2em; margin: 1.5em 0 0.5em; }
+  .markdown-body h4 { font-size: 1em; margin: 1.3em 0 0.4em; }
+  .markdown-body :is(h5, h6) { font-size: 0.9em; margin: 1.2em 0 0.4em; color: var(--pcb-fg-muted); }
+  .markdown-body .anchor {
+    position: absolute;
+    left: -1.1em;
+    padding-right: 0.3em;
+    font-family: var(--font-mono);
+    font-weight: 400;
+    color: var(--pcb-fg-subtle);
+    text-decoration: none;
+    opacity: 0;
+    transition: opacity 140ms;
   }
-  .markdown-body h1 { font-size: 2em; font-weight: 600; margin: 1.2em 0 0.6em; }
-  .markdown-body h2 { font-size: 1.5em; font-weight: 600; margin: 1.2em 0 0.6em; }
-  .markdown-body h3 { font-size: 1.25em; font-weight: 600; margin: 1.1em 0 0.5em; }
-  .markdown-body h4 { font-size: 1em; font-weight: 600; margin: 1em 0 0.5em; }
-  .markdown-body p, .markdown-body ul, .markdown-body ol, .markdown-body pre, .markdown-body table, .markdown-body blockquote { margin: 0 0 1em; }
-  .markdown-body ul { list-style: disc; padding-left: 2em; }
-  .markdown-body ol { list-style: decimal; padding-left: 2em; }
-  .markdown-body a { color: var(--pcb-accent); text-decoration: none; }
-  .markdown-body a:hover { text-decoration: underline; }
-  .markdown-body code { font-family: var(--font-mono); font-size: 85%; background: var(--pcb-neutral-muted); padding: 0.2em 0.4em; border-radius: 6px; }
-  .markdown-body pre { background: var(--pcb-canvas-subtle); padding: 16px; border-radius: 6px; overflow: auto; font-size: 85%; }
-  .markdown-body pre code { background: transparent; padding: 0; font-size: 100%; }
-  .markdown-body blockquote { color: var(--pcb-fg-muted); border-left: 0.25em solid var(--pcb-border); padding: 0 1em; }
-  .markdown-body table { border-collapse: collapse; display: block; overflow: auto; }
-  .markdown-body th, .markdown-body td { border: 1px solid var(--pcb-border); padding: 6px 13px; }
-  .markdown-body tr:nth-child(2n) { background: var(--pcb-canvas-subtle); }
-  .markdown-body img { max-width: 100%; }
-  .markdown-body hr { border: 0; border-top: 1px solid var(--pcb-border); margin: 1.5em 0; }
+  .markdown-body :is(h1, h2, h3, h4, h5, h6):hover .anchor,
+  .markdown-body .anchor:focus-visible { opacity: 1; }
+  .markdown-body :is(p, ul, ol, pre, .table-wrap, blockquote, details, .markdown-alert, dl) { margin: 0 0 1em; }
+  .markdown-body ul { list-style: none; padding-left: 1.4em; }
+  .markdown-body ul > li { position: relative; }
+  .markdown-body ul > li::before {
+    content: '';
+    position: absolute;
+    left: -1.05em;
+    top: 0.72em;
+    width: 5px;
+    height: 1px;
+    background: var(--pcb-fg-subtle);
+  }
+  .markdown-body ul ul > li::before { width: 3px; }
+  .markdown-body ol { list-style: decimal; padding-left: 1.8em; }
+  .markdown-body ol > li::marker { font-family: var(--font-mono); font-size: 0.85em; color: var(--pcb-fg-subtle); }
+  .markdown-body li + li { margin-top: 0.25em; }
+  .markdown-body li > :is(ul, ol) { margin: 0.25em 0 0; }
+  .markdown-body .contains-task-list { padding-left: 0.2em; }
+  .markdown-body .task-list-item::before { display: none; }
+  .markdown-body .task-list-item > input {
+    margin: 0 0.55em 0.2em 0;
+    vertical-align: middle;
+    accent-color: var(--pcb-accent-emphasis);
+  }
+  .markdown-body a { color: var(--pcb-fg); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); }
+  .markdown-body a:hover { text-decoration-color: currentColor; }
+  .markdown-body a.mention, .markdown-body a.issue-ref { font-weight: 500; color: var(--pcb-fg); text-decoration: none; }
+  .markdown-body a.mention:hover, .markdown-body a.issue-ref:hover { color: var(--pcb-fg); text-decoration: underline; }
+  .markdown-body strong { font-weight: 600; }
+  .markdown-body del { color: var(--pcb-fg-muted); }
+  .markdown-body code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: var(--pcb-neutral-muted);
+    padding: 0.12em 0.38em;
+    border-radius: 2px;
+  }
+  .markdown-body kbd {
+    font-family: var(--font-mono);
+    font-size: 0.78em;
+    padding: 0.1em 0.45em;
+    border: 1px solid var(--pcb-border);
+    border-bottom-width: 2px;
+    border-radius: 2px;
+    background: var(--pcb-canvas-subtle);
+  }
+  .markdown-body pre {
+    position: relative;
+    background: var(--pcb-canvas-inset);
+    border: 1px solid var(--pcb-border-muted);
+    padding: 14px 16px;
+    overflow: auto;
+    font-size: 13px;
+    line-height: 1.55;
+    border-radius: 2px;
+  }
+  .markdown-body pre code { background: transparent; padding: 0; font-size: 100%; border-radius: 0; }
+  .markdown-body pre[data-lang]::before {
+    content: attr(data-lang);
+    position: absolute;
+    top: 6px;
+    right: 58px;
+    font: 10px/1.6 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--pcb-fg-subtle);
+  }
+  .markdown-body .md-copy {
+    position: absolute;
+    top: 5px;
+    right: 6px;
+    font: 10px/1.6 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0 6px;
+    border: 1px solid var(--pcb-border);
+    border-radius: 2px;
+    background: var(--pcb-canvas);
+    color: var(--pcb-fg-muted);
+    opacity: 0;
+    transition: opacity 140ms;
+    cursor: pointer;
+  }
+  .markdown-body pre:hover .md-copy, .markdown-body .md-copy:focus-visible { opacity: 1; }
+  .markdown-body .md-copy:hover { color: var(--pcb-fg); border-color: var(--pcb-fg-subtle); }
+  .markdown-body blockquote { color: var(--pcb-fg-muted); border-left: 2px solid var(--pcb-border); padding: 0 1em; }
+  .markdown-body .markdown-alert { border-left: 2px solid var(--alert); padding: 0.5em 1em; background: color-mix(in srgb, var(--alert) 6%, transparent); }
+  .markdown-body .markdown-alert > :last-child { margin-bottom: 0; }
+  .markdown-body .markdown-alert-title {
+    margin: 0 0 0.35em !important;
+    font: 500 11px/1.6 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--alert);
+  }
+  .markdown-body .markdown-alert-note { --alert: #5b9bd5; }
+  .markdown-body .markdown-alert-tip { --alert: var(--pcb-success); }
+  .markdown-body .markdown-alert-important { --alert: var(--pcb-done); }
+  .markdown-body .markdown-alert-warning { --alert: var(--pcb-attention); }
+  .markdown-body .markdown-alert-caution { --alert: var(--pcb-danger); }
+  .markdown-body .table-wrap { overflow-x: auto; }
+  .markdown-body table { border-collapse: collapse; font-size: 0.92em; min-width: 50%; }
+  .markdown-body th {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--pcb-fg-muted);
+    text-align: left;
+    border-bottom: 1px solid var(--pcb-border);
+    padding: 6px 14px 6px 0;
+  }
+  .markdown-body td { border-bottom: 1px solid var(--pcb-border-muted); padding: 7px 14px 7px 0; vertical-align: top; }
+  .markdown-body :is(th, td)[align='right'] { text-align: right; }
+  .markdown-body :is(th, td)[align='center'] { text-align: center; }
+  .markdown-body img { max-width: 100%; border-radius: 2px; }
+  .markdown-body hr { border: 0; border-top: 1px solid var(--pcb-border); margin: 2em 0; }
+  .markdown-body details { border: 1px solid var(--pcb-border-muted); padding: 0.5em 0.9em; }
+  .markdown-body summary { cursor: pointer; font-weight: 500; }
+  .markdown-body details[open] > summary { margin-bottom: 0.5em; }
+  .markdown-body dt { font-weight: 600; }
+  .markdown-body dd { margin: 0 0 0.5em 1.2em; color: var(--pcb-fg-muted); }
+  .markdown-body sup, .markdown-body sub { font-size: 0.75em; }
+
+  /* Syntax tokens (lezer classHighlighter) */
+  .tok-keyword, .tok-operatorKeyword, .tok-controlKeyword { color: #d77c4a; }
+  .tok-string, .tok-string2, .tok-special { color: #8fbf7a; }
+  .tok-number, .tok-bool, .tok-atom, .tok-literal { color: #d8a657; }
+  .tok-comment, .tok-meta { color: var(--pcb-fg-subtle); font-style: italic; }
+  .tok-variableName.tok-definition, .tok-function, .tok-propertyName.tok-definition { color: #7fb4ca; }
+  .tok-typeName, .tok-className, .tok-namespace { color: #c39bd3; }
+  .tok-propertyName, .tok-attributeName { color: #a9b5c4; }
+  .tok-inserted { color: var(--pcb-success); }
+  .tok-deleted { color: var(--pcb-danger); }
+  .tok-heading { font-weight: 600; }
+  .tok-invalid { color: var(--pcb-danger); }
+  :root:not([data-theme='dark']) :is(.tok-keyword, .tok-operatorKeyword, .tok-controlKeyword) { color: #a3420f; }
+  :root:not([data-theme='dark']) :is(.tok-string, .tok-string2, .tok-special) { color: #2f6b1f; }
+  :root:not([data-theme='dark']) :is(.tok-number, .tok-bool, .tok-atom, .tok-literal) { color: #7a5200; }
+  :root:not([data-theme='dark']) :is(.tok-function, .tok-variableName.tok-definition, .tok-propertyName.tok-definition) { color: #1d5f86; }
+  :root:not([data-theme='dark']) :is(.tok-typeName, .tok-className, .tok-namespace) { color: #6b3b80; }
+  :root:not([data-theme='dark']) :is(.tok-propertyName, .tok-attributeName) { color: #3f4954; }
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+@keyframes pop-enter {
+  from {
+    opacity: 0;
+    scale: 1 0.96;
+  }
+}
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+  .reveal {
+    opacity: 1;
+    translate: none;
+  }
 }

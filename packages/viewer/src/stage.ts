@@ -1,5 +1,5 @@
 import { Application, Container, Graphics } from 'pixi.js';
-import type { BBox, Pt } from '@pcbhub/kicad-core/types';
+import type { BBox, Pt } from '@jumper/kicad-core/types';
 
 export interface ViewState {
   /** World point at the centre of the canvas (mm). */
@@ -206,23 +206,50 @@ export class Stage {
     let dragging = false;
     let moved = 0;
     let last = { x: 0, y: 0 };
+    // Touch: every finger on the canvas, for two-finger pinch-zoom and pan.
+    const pointers = new Map<number, { x: number; y: number }>();
+    let pinch: { dist: number; mid: { x: number; y: number } } | null = null;
+    let lastTap = { t: 0, x: 0, y: 0 };
 
     const local = (e: PointerEvent | WheelEvent) => {
       const r = c.getBoundingClientRect();
       return { x: e.clientX - r.left, y: e.clientY - r.top };
     };
+    const pinchState = () => {
+      const [a, b] = [...pointers.values()];
+      return { dist: Math.hypot(a!.x - b!.x, a!.y - b!.y), mid: { x: (a!.x + b!.x) / 2, y: (a!.y + b!.y) / 2 } };
+    };
     const onDown = (e: PointerEvent) => {
-      if (e.button !== 0 && e.button !== 1) return;
+      if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 1) return;
+      pointers.set(e.pointerId, local(e));
+      c.setPointerCapture(e.pointerId);
+      if (pointers.size === 2) {
+        // Second finger: switch from panning to pinching, and never treat it as a tap.
+        pinch = pinchState();
+        dragging = false;
+        moved = Infinity;
+        return;
+      }
+      if (pointers.size > 2) return;
       dragging = true;
       moved = 0;
       last = local(e);
-      c.setPointerCapture(e.pointerId);
       c.style.cursor = 'grabbing';
     };
     const onMove = (e: PointerEvent) => {
       const p = local(e);
+      if (pointers.has(e.pointerId)) pointers.set(e.pointerId, p);
+      if (pinch && pointers.size === 2) {
+        const next = pinchState();
+        if (pinch.dist > 0) this.zoomBy(next.dist / pinch.dist, next.mid.x, next.mid.y);
+        this.world.position.set(this.world.x + next.mid.x - pinch.mid.x, this.world.y + next.mid.y - pinch.mid.y);
+        this.redrawOverlay();
+        this.emitView();
+        pinch = next;
+        return;
+      }
       if (!dragging) {
-        this.opts.onHover?.(this.screenToWorld(p.x, p.y));
+        if (e.pointerType === 'mouse') this.opts.onHover?.(this.screenToWorld(p.x, p.y));
         return;
       }
       const dx = p.x - last.x;
@@ -234,13 +261,38 @@ export class Stage {
       this.emitView();
     };
     const onUp = (e: PointerEvent) => {
+      pointers.delete(e.pointerId);
+      if (c.hasPointerCapture(e.pointerId)) c.releasePointerCapture(e.pointerId);
+      if (pinch) {
+        if (pointers.size < 2) pinch = null;
+        // Lifting one of two fingers: keep panning with the other.
+        if (pointers.size === 1) {
+          dragging = true;
+          last = [...pointers.values()][0]!;
+        }
+        return;
+      }
       if (!dragging) return;
       dragging = false;
       c.style.cursor = '';
-      if (c.hasPointerCapture(e.pointerId)) c.releasePointerCapture(e.pointerId);
-      if (moved < 4 && e.button === 0) {
+      if (moved < (e.pointerType === 'mouse' ? 4 : 10) && e.button === 0) {
         const p = local(e);
+        // Double-tap zooms in on touch screens, where there is no wheel.
+        if (e.pointerType !== 'mouse' && e.timeStamp - lastTap.t < 300 && Math.hypot(p.x - lastTap.x, p.y - lastTap.y) < 30) {
+          this.zoomBy(2, p.x, p.y);
+          lastTap = { t: 0, x: 0, y: 0 };
+          return;
+        }
+        lastTap = { t: e.timeStamp, x: p.x, y: p.y };
         this.opts.onClick?.(this.screenToWorld(p.x, p.y), e);
+      }
+    };
+    const onCancel = (e: PointerEvent) => {
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) pinch = null;
+      if (!pointers.size) {
+        dragging = false;
+        c.style.cursor = '';
       }
     };
     const onWheel = (e: WheelEvent) => {
@@ -253,14 +305,14 @@ export class Stage {
     c.addEventListener('pointerdown', onDown);
     c.addEventListener('pointermove', onMove);
     c.addEventListener('pointerup', onUp);
-    c.addEventListener('pointercancel', onUp);
+    c.addEventListener('pointercancel', onCancel);
     c.addEventListener('pointerleave', onLeave);
     c.addEventListener('wheel', onWheel, { passive: false });
     this.cleanup.push(() => {
       c.removeEventListener('pointerdown', onDown);
       c.removeEventListener('pointermove', onMove);
       c.removeEventListener('pointerup', onUp);
-      c.removeEventListener('pointercancel', onUp);
+      c.removeEventListener('pointercancel', onCancel);
       c.removeEventListener('pointerleave', onLeave);
       c.removeEventListener('wheel', onWheel);
     });

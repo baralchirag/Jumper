@@ -3,7 +3,7 @@ import { cx } from '../cx';
 
 export function Counter({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <span className={cx('inline-flex min-w-5 items-center justify-center rounded-full bg-neutral-muted px-1.5 text-xs font-medium leading-5 text-fg', className)}>
+    <span className={cx('inline-flex min-w-5 items-center justify-center rounded-sm bg-neutral-muted px-1.5 font-mono text-xs leading-5 text-fg-muted tabular-nums', className)}>
       {children}
     </span>
   );
@@ -20,9 +20,10 @@ const tones: Record<LabelTone, string> = {
   done: 'border-done/40 text-done',
 };
 
+/** Mono tag, like a silkscreen label. */
 export function Label({ tone = 'default', children, className }: { tone?: LabelTone; children: ReactNode; className?: string }) {
   return (
-    <span className={cx('inline-flex items-center gap-1 rounded-full border px-2 text-xs font-medium leading-5', tones[tone], className)}>
+    <span className={cx('inline-flex items-center gap-1 rounded-sm border px-1.5 font-mono text-[11.5px] font-medium uppercase leading-[18px] tracking-[0.04em]', tones[tone], className)}>
       {children}
     </span>
   );
@@ -36,7 +37,7 @@ const states = {
 
 export function StateBadge({ state, icon, children }: { state: keyof typeof states; icon?: ReactNode; children: ReactNode }) {
   return (
-    <span className={cx('inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium text-fg-on-emphasis', states[state])}>
+    <span className={cx('inline-flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-[13px] font-medium text-fg-on-emphasis', states[state], state === 'merged' && 'text-canvas')}>
       {icon}
       {children}
     </span>
