@@ -1,5 +1,5 @@
 @import 'tailwindcss';
-@import '@pcbhub/ui/styles.css';
+@import '@jumper/ui/styles.css';
 
 @source '../../../packages/ui/src';
 
@@ -28,3 +28,7 @@
   background-size: 16px 16px;
   background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }
+
+@keyframes nav-progress { 0% { transform: scaleX(0); } 70% { transform: scaleX(0.85); } 100% { transform: scaleX(0.95); } }
+.nav-progress { transform-origin: left; animation: nav-progress 1.6s cubic-bezier(.2,.7,0,1) both; }
+@media (prefers-reduced-motion: reduce) { .nav-progress { animation: none; transform: scaleX(0.6); } }
