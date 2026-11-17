@@ -1,0 +1,90 @@
+{
+ "width": 2000,
+ "height": 835,
+ "board": {
+  "name": "RoyalBlue54L Feather",
+  "author": "Lord's Boards",
+  "license": "CERN-OHL-P-2.0",
+  "url": "https://www.crowdsupply.com/lords-boards/royalblue54l-feather"
+ },
+ "changes": [
+  {
+   "id": "tp13",
+   "kind": "added",
+   "ref": "TP13",
+   "title": "TP13 added",
+   "detail": "Test pad on SWDCLK",
+   "box": [
+    0.1999,
+    0.3701,
+    0.2441,
+    0.4754
+   ]
+  },
+  {
+   "id": "j4",
+   "kind": "removed",
+   "ref": "J4",
+   "title": "J4 removed",
+   "detail": "JST battery connector, and the track stubs on its pads",
+   "box": [
+    0.2364,
+    0.0428,
+    0.39,
+    0.4484
+   ]
+  },
+  {
+   "id": "sw3",
+   "kind": "added",
+   "ref": "SW3",
+   "title": "SW3 added",
+   "detail": "A second push button where the connector was",
+   "box": [
+    0.2805,
+    0.1208,
+    0.3459,
+    0.3704
+   ]
+  },
+  {
+   "id": "tp12",
+   "kind": "added",
+   "ref": "TP12",
+   "title": "TP12 added",
+   "detail": "Test pad on SWDIO",
+   "box": [
+    0.3838,
+    0.1946,
+    0.4279,
+    0.2999
+   ]
+  },
+  {
+   "id": "d1",
+   "kind": "moved",
+   "ref": "D1",
+   "title": "D1 moved 1.6 mm left",
+   "detail": "Status LED, tracks follow the pads",
+   "box": [
+    0.7143,
+    0.7182,
+    0.8001,
+    0.8021
+   ]
+  },
+  {
+   "id": "r6",
+   "kind": "changed",
+   "ref": "R6",
+   "title": "R6 470R → 1k",
+   "detail": "Value only: the render is identical, the diff still catches it",
+   "box": [
+    0.7903,
+    0.7243,
+    0.8354,
+    0.7961
+   ]
+  }
+ ]
+}
