@@ -8,14 +8,14 @@
     "dev": {
       "cache": false,
       "persistent": true,
-      "dependsOn": ["@pcbhub/kicad-core#build"]
+      "dependsOn": ["@jumper/kicad-core#build"]
     },
     "lint": {},
     "typecheck": {
-      "dependsOn": ["@pcbhub/kicad-core#build"]
+      "dependsOn": ["@jumper/kicad-core#build"]
     },
     "test": {
-      "dependsOn": ["@pcbhub/kicad-core#build"]
+      "dependsOn": ["@jumper/kicad-core#build"]
     }
   }
 }

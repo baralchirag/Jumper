@@ -11,3 +11,6 @@ packages/kicad-core/pkg-web/
 packages/kicad-core/pkg-node/
 playwright-report/
 test-results/
+
+# Internal business notes (not for the repo)
+internal-docs/

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://go.kicad.org/pcm/schemas/v1",
+  "name": "Jumper",
+  "description": "Commit, push and pull your KiCad project to Jumper, open pull requests and see check results from the PCB editor.",
+  "description_full": "Jumper hosts KiCad projects with visual diffs, design review and automatic ERC/DRC, BOM and fabrication outputs on every push.\n\nThis plugin adds a Jumper button to the PCB editor's top toolbar (and Tools > External Plugins > Jumper). It shows what changed, commits it with a message, pushes it to Jumper, pulls your team's changes, starts a branch and opens a pull request, and shows the ERC/DRC check results for your latest push. It only fast-forwards: if your copy and the server both changed, it tells you instead of merging behind your back.\n\nRequires git on your PATH. Works with HTTPS (using a personal access token) and SSH remotes.",
+  "identifier": "com.jumper.kicad",
+  "type": "plugin",
+  "author": {
+    "name": "Jumper",
+    "contact": {}
+  },
+  "license": "MIT",
+  "tags": [
+    "git",
+    "version-control",
+    "collaboration"
+  ],
+  "versions": [
+    {
+      "version": "1.1.0",
+      "status": "stable",
+      "kicad_version": "7.0",
+      "runtime": "swig"
+    }
+  ],
+  "resources": {}
+}
