@@ -11,7 +11,10 @@ const envSchema = z.object({
   REPOS_DIR: z.string().default('./data/repos'),
   WORKER_SANDBOX: z.enum(['docker', 'none']).default('none'),
   WORKER_KICAD_IMAGE: z.string().default('jumper/kicad-worker:latest'),
+  /** Slow lane: renders and exports. Each running job wants about 2 vCPU and 4 GB. */
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(2),
+  /** Fast lane: ERC, DRC and BOM. Light, so review feedback arrives in about a minute even when renders queue up. */
+  WORKER_CHECKS_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(1),
   WORKER_JOB_TIMEOUT_MS: z.coerce.number().int().default(10 * 60_000),
   WORKER_STEP_TIMEOUT_MS: z.coerce.number().int().default(5 * 60_000),
   WORKER_MAX_CHECKOUT_BYTES: z.coerce.number().int().default(1024 * 1024 * 1024),

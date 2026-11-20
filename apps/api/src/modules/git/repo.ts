@@ -128,6 +128,12 @@ export class GitRepo {
     return m;
   }
 
+  /** Every commit a branch or tag points at, with annotated tags peeled to their commit. */
+  async pointedCommits(): Promise<Set<string>> {
+    const out = await this.text(['for-each-ref', '--format=%(objectname) %(*objectname)', 'refs/heads', 'refs/tags']);
+    return new Set(out.split(/\s+/).filter((s) => /^[0-9a-f]{40,64}$/.test(s)));
+  }
+
   async branches(): Promise<RefInfo[]> {
     const out = await this.text(['for-each-ref', '--sort=-committerdate', '--format=%(refname:lstrip=2)%00%(objectname)', 'refs/heads']);
     return out

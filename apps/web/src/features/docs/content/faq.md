@@ -20,7 +20,7 @@
 
 **My checks never start.** Open the commit's **Checks** page: checks usually start within a minute of a push. If nothing has started after a few minutes, push again or contact support with the repository and commit.
 
-**A check says `timed_out`.** A single step gets 5 minutes and a whole commit 10 minutes by default. Very large boards with `render_quality: high` are the usual cause: set `render_quality: basic`, or turn off outputs you do not need.
+**A check says `timed_out`.** A single step gets 5 minutes and a whole commit 10 minutes by default. Very large boards rendered at high quality are the usual cause. Branches already render at basic quality; for the default branch set `render_quality: basic`, or turn off outputs you do not need.
 
 **DRC fails with "unconnected items" on a board I'm still routing.** Set `checks.drc.fail_on_unconnected: false` until routing is finished, or `fail_on: never` to see violations without failing.
 

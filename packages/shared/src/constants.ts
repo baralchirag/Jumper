@@ -81,7 +81,13 @@ export type MergeMethod = (typeof MERGE_METHODS)[number];
 export const TOKEN_SCOPES = ['repo:read', 'repo:write', 'admin'] as const;
 export type TokenScope = (typeof TOKEN_SCOPES)[number];
 
+/** Fast lane: ERC, DRC and BOM, so review feedback is not stuck behind renders. */
 export const QUEUE_ANALYZE = 'analyze-commit';
+/** Slow lane: 3D renders, SVGs and exports (GLB, STEP, Gerbers, PDFs). */
+export const QUEUE_OUTPUTS = 'commit-outputs';
+/** Which checks each lane runs. */
+export const CHECK_STAGES = { checks: ['ERC', 'DRC', 'BOM'], outputs: ['Render', 'Exports'] } as const;
+export type CheckStage = keyof typeof CHECK_STAGES;
 export const EVENTS_CHANNEL = 'jumper:events';
 
 /** The .gitignore Jumper writes into new KiCad repositories (also shown in the first-push guide). */

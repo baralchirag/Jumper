@@ -6,7 +6,7 @@ import yazl from 'yazl';
 import { artifacts, checkRuns, eq, namespaceUsage, namespaces, repositories, type Database } from '@jumper/db';
 import type { KicadCore, Pcb } from '@jumper/kicad-core/node';
 import {
-  CHECK_NAMES,
+  CHECK_STAGES,
   EVENTS_CHANNEL,
   isPlanId,
   parseJumperConfig,
@@ -15,6 +15,7 @@ import {
   type CheckConclusion,
   type CheckDetails,
   type CheckName,
+  type CheckStage,
   type CheckStatus,
   type JumperConfig,
   type PlatformEvent,
@@ -68,6 +69,7 @@ export class Analyzer {
     projectPath: string,
     status: CheckStatus,
     result?: Partial<StepResult>,
+    opts: { ifAbsent?: boolean } = {},
   ): Promise<void> {
     const now = new Date();
     const values = {
@@ -84,10 +86,14 @@ export class Analyzer {
     };
     const set: Partial<typeof values> = { status, conclusion: values.conclusion, summary: values.summary, details: values.details, completedAt: values.completedAt };
     if (status === 'in_progress' || status === 'queued') set.startedAt = values.startedAt;
-    await this.deps.db
-      .insert(checkRuns)
-      .values(values)
-      .onConflictDoUpdate({ target: [checkRuns.repoId, checkRuns.sha, checkRuns.name, checkRuns.projectPath], set });
+    const insert = this.deps.db.insert(checkRuns).values(values);
+    if (opts.ifAbsent) {
+      // Placeholder for the other lane's checks: never overwrite what that lane already wrote.
+      const added = await insert.onConflictDoNothing().returning({ id: checkRuns.id });
+      if (!added.length) return;
+    } else {
+      await insert.onConflictDoUpdate({ target: [checkRuns.repoId, checkRuns.sha, checkRuns.name, checkRuns.projectPath], set });
+    }
     await this.publish({ type: 'check', repoId: job.repoId, sha: job.sha, name, projectPath, status, conclusion: values.conclusion });
   }
 
@@ -123,11 +129,16 @@ export class Analyzer {
     return `Paused: ${repo.owner} has used all ${plan.limits.checkMinutes} check minutes on the ${plan.name} plan this month. Checks resume on the 1st (UTC); push again then, or ask an administrator for a bigger plan.`;
   }
 
-  async run(job: AnalyzeCommitJob): Promise<void> {
+  /**
+   * Analyze one commit for one lane. `checks` runs ERC, DRC and BOM (fast); `outputs` runs renders and exports (slow).
+   * The two lanes are separate jobs on separate queues, so review feedback never waits behind a STEP export.
+   */
+  async run(job: AnalyzeCommitJob, stage: CheckStage = 'checks'): Promise<void> {
     const { env } = this.deps;
+    const mine = new Set<CheckName>(CHECK_STAGES[stage]);
     const repoRow = (
       await this.deps.db
-        .select({ id: repositories.id, namespaceId: repositories.namespaceId, plan: namespaces.plan, owner: namespaces.slug })
+        .select({ id: repositories.id, namespaceId: repositories.namespaceId, plan: namespaces.plan, owner: namespaces.slug, defaultBranch: repositories.defaultBranch })
         .from(repositories)
         .innerJoin(namespaces, eq(namespaces.id, repositories.namespaceId))
         .where(eq(repositories.id, job.repoId))
@@ -139,7 +150,7 @@ export class Analyzer {
     }
     const minutesBlock = await this.minutesExhausted(repoRow);
     if (minutesBlock) {
-      for (const name of CHECK_NAMES) await this.setCheck(job, name, '', 'completed', { conclusion: 'skipped', summary: minutesBlock });
+      for (const name of mine) await this.setCheck(job, name, '', 'completed', { conclusion: 'skipped', summary: minutesBlock });
       log.info('check minutes used up, skipping', { ...job, owner: repoRow.owner });
       return;
     }
@@ -147,7 +158,12 @@ export class Analyzer {
     const deadline = Date.now() + env.WORKER_JOB_TIMEOUT_MS;
 
     const cfgText = await git.readFile(repo, job.sha, '.jumper.yml', 256 * 1024);
-    const { config, error: configError } = parseJumperConfig(cfgText);
+    const parsed = parseJumperConfig(cfgText);
+    const configError = parsed.error;
+    // Ray-traced renders are the heaviest step: high quality on the default branch (and manual re-runs, which have no
+    // branch), basic elsewhere, unless .jumper.yml asks for one quality everywhere.
+    const onDefault = !job.ref || job.ref === repoRow.defaultBranch;
+    const config: JumperConfig = { ...parsed.config, outputs: { ...parsed.config.outputs, render_quality: parsed.config.outputs.render_quality ?? (onDefault ? 'high' : 'basic') } };
     const files = await git.listFiles(repo, job.sha);
     const projects = discoverProjects(
       files.map((f) => f.path),
@@ -155,6 +171,8 @@ export class Analyzer {
     );
 
     if (!projects.length) {
+      // The checks lane reports for both lanes, so the commit says "no project" once.
+      if (stage !== 'checks') return;
       const summary = configError ? `Invalid .jumper.yml: ${configError}` : 'No KiCad project found in this commit';
       for (const name of ['ERC', 'DRC', 'BOM', 'Render', 'Exports'] as CheckName[]) {
         await this.setCheck(job, name, '', 'completed', { conclusion: configError ? 'failure' : 'skipped', summary });
@@ -162,16 +180,20 @@ export class Analyzer {
       return;
     }
 
-    const plan = (p: Project): [CheckName, boolean][] => [
+    const allChecks = (p: Project): [CheckName, boolean][] => [
       ['ERC', Boolean(p.schematic) && config.checks.erc.enabled],
       ['DRC', Boolean(p.board) && config.checks.drc.enabled],
       ['BOM', Boolean(p.schematic) && config.checks.bom.enabled],
       ['Render', config.outputs.svg || (Boolean(p.board) && config.outputs.render3d)],
       ['Exports', hasExports(p, config)],
     ];
+    const plan = (p: Project) => allChecks(p).filter(([name]) => mine.has(name));
     for (const p of projects) {
-      for (const [name, enabled] of plan(p)) {
-        await this.setCheck(job, name, p.path, enabled ? 'queued' : 'completed', enabled ? undefined : { conclusion: 'skipped', summary: 'Not applicable or disabled in .jumper.yml' });
+      for (const [name, enabled] of allChecks(p)) {
+        const state = enabled ? 'queued' : 'completed';
+        const result = enabled ? undefined : { conclusion: 'skipped' as const, summary: 'Not applicable or disabled in .jumper.yml' };
+        // Show the other lane's checks as queued too, without touching anything it has already written.
+        await this.setCheck(job, name, p.path, state, result, { ifAbsent: !mine.has(name) });
       }
     }
 
@@ -188,10 +210,13 @@ export class Analyzer {
         await mkdir(out, { recursive: true, mode: 0o777 });
         await chmod(out, 0o777);
         const models = p.board && version ? await this.prepareBoard(p, work, files.map((f) => f.path)) : null;
-        const libraries = await this.libraries(job, p, work, files.map((f) => f.path), models?.missing ?? []).catch((e) => {
-          log.warn('library report failed', { ...job, project: p.path, error: String(e) });
-          return null;
-        });
+        const libraries =
+          stage === 'checks'
+            ? await this.libraries(job, p, work, files.map((f) => f.path), models?.missing ?? []).catch((e) => {
+                log.warn('library report failed', { ...job, project: p.path, error: String(e) });
+                return null;
+              })
+            : null;
         for (const [name, enabled] of plan(p)) {
           if (!enabled) continue;
           await this.setCheck(job, name, p.path, 'in_progress');
@@ -409,7 +434,7 @@ export class Analyzer {
       for (const [order, shot] of shots.entries()) {
         const target = join(dir, `${shot.name}.png`);
         const r = await this.cli.exec(
-          ['pcb', 'render', ...shot.args, '--quality', config.outputs.render_quality, '--background', 'opaque', '-w', '1600', '-h', '1000', '-o', this.rel(work, target), `src/${p.board}`],
+          ['pcb', 'render', ...shot.args, '--quality', config.outputs.render_quality ?? 'high', '--background', 'opaque', '-w', '1600', '-h', '1000', '-o', this.rel(work, target), `src/${p.board}`],
           work,
         );
         if (await stat(target).then((st) => st.size > 0, () => false)) {

@@ -22,6 +22,7 @@ afterAll(async () => {
   ctx.redis.disconnect();
   ctx.rateLimitRedis.disconnect();
   await ctx.queue.close().catch(() => {});
+  await ctx.outputsQueue.close().catch(() => {});
 });
 
 describe('app', () => {

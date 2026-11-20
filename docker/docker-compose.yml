@@ -97,6 +97,7 @@ services:
       # The worker image *is* the hardened KiCad sandbox: no host docker socket needed.
       WORKER_SANDBOX: none
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+      WORKER_CHECKS_CONCURRENCY: ${WORKER_CHECKS_CONCURRENCY:-1}
     volumes: [repos:/data/repos:ro]
     read_only: true
     tmpfs: ['/tmp:size=4g', '/home/kicad:size=512m']

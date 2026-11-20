@@ -51,7 +51,8 @@ export const jumperConfigSchema = z
         gerbers: z.boolean().default(true),
         /** Ray-traced 3D images (top, bottom, isometric) from KiCad's own renderer. */
         render3d: z.boolean().default(true),
-        render_quality: z.enum(['basic', 'high']).default('high'),
+        /** Unset: `high` on the default branch (and manual re-runs), `basic` on other branches, which renders much faster. */
+        render_quality: z.enum(['basic', 'high']).optional(),
         /** Schematic and board PDFs. */
         pdf: z.boolean().default(true),
         /** Pick-and-place files (KiCad CSV). */

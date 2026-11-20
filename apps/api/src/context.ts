@@ -1,7 +1,7 @@
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import { createDb, type Database } from '@jumper/db';
-import { EVENTS_CHANNEL, QUEUE_ANALYZE, type AnalyzeCommitJob, type PlatformEvent } from '@jumper/shared';
+import { EVENTS_CHANNEL, QUEUE_ANALYZE, QUEUE_OUTPUTS, type AnalyzeCommitJob, type PlatformEvent } from '@jumper/shared';
 import { createStorage, type Storage } from '@jumper/storage';
 import { watchRedis } from '@jumper/shared/node';
 import type { Env } from './env';
@@ -13,7 +13,10 @@ export interface Ctx {
   redis: Redis;
   /** Fail-fast connection for rate limiting; requests proceed if Redis is down. */
   rateLimitRedis: Redis;
+  /** Fast lane (ERC, DRC, BOM). */
   queue: Queue<AnalyzeCommitJob>;
+  /** Slow lane (renders and exports). */
+  outputsQueue: Queue<AnalyzeCommitJob>;
   storage: Storage;
   kicad: KicadPool;
   publish(event: PlatformEvent): Promise<void>;
@@ -33,15 +36,14 @@ export function createContext(env: Env): Ctx {
   const log = (level: 'error' | 'info') => (msg: string) => process.stderr.write(`${JSON.stringify({ level, msg, time: new Date().toISOString() })}\n`);
   watchRedis(redis, 'main', log('error'), log('info'));
   watchRedis(queueRedis, 'queue', log('error'), log('info'));
-  const queue = new Queue<AnalyzeCommitJob>(QUEUE_ANALYZE, {
-    connection: queueRedis,
-    defaultJobOptions: {
-      attempts: 2,
-      backoff: { type: 'exponential', delay: 10_000 },
-      removeOnComplete: { age: 7 * 24 * 3600, count: 5000 },
-      removeOnFail: { age: 30 * 24 * 3600 },
-    },
-  });
+  const jobOptions = {
+    attempts: 2,
+    backoff: { type: 'exponential' as const, delay: 10_000 },
+    removeOnComplete: { age: 7 * 24 * 3600, count: 5000 },
+    removeOnFail: { age: 30 * 24 * 3600 },
+  };
+  const queue = new Queue<AnalyzeCommitJob>(QUEUE_ANALYZE, { connection: queueRedis, defaultJobOptions: jobOptions });
+  const outputsQueue = new Queue<AnalyzeCommitJob>(QUEUE_OUTPUTS, { connection: queueRedis, defaultJobOptions: jobOptions });
   const storage = createStorage();
   return {
     env,
@@ -49,6 +51,7 @@ export function createContext(env: Env): Ctx {
     redis,
     rateLimitRedis,
     queue,
+    outputsQueue,
     storage,
     kicad: new KicadPool(undefined, env.KICAD_POOL === 'inline'),
     listeners: [],
@@ -58,7 +61,7 @@ export function createContext(env: Env): Ctx {
       for (const l of this.listeners) Promise.resolve(l(event)).catch(() => {});
     },
     async close() {
-      await queue.close();
+      await Promise.all([queue.close(), outputsQueue.close()]);
       await this.kicad.close();
       redis.disconnect();
       rateLimitRedis.disconnect();

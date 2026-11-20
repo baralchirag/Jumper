@@ -24,14 +24,15 @@ export function monthStart(now = new Date()): Date {
 
 const rows = <T>(r: unknown) => r as T[];
 
-// Wall-clock minutes per commit: checks of one commit run in the same job (partly in parallel), so we bill from the
-// first start to the last finish and round up once per commit rather than once per check.
+// Wall-clock minutes per commit and lane: checks (ERC, DRC, BOM) and outputs (renders, exports) run as two jobs on two
+// queues. Each lane is billed from its first start to its last finish and rounded up once, so time an outputs job spends
+// waiting in the queue is never billed.
 const minutesPerRepo = (since: Date) => sql`
   select repo_id, sum(m)::int as minutes from (
     select cr.repo_id, ceil(extract(epoch from (max(cr.completed_at) - min(cr.started_at))) / 60.0) as m
     from check_runs cr
     where cr.started_at is not null and cr.completed_at is not null and cr.completed_at >= ${since.toISOString()}
-    group by cr.repo_id, cr.sha
+    group by cr.repo_id, cr.sha, (cr.name in ('Render', 'Exports'))
   ) per_commit group by repo_id`;
 
 /** Storage, check minutes and seats for one namespace (a user or an organization). */

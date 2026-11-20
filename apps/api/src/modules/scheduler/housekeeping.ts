@@ -1,4 +1,4 @@
-import { and, artifacts, auditLog, emailVerifications, eq, inArray, lt, notifications, passwordResets, releases, repositories, sessions, sql, webhookDeliveries } from '@jumper/db';
+import { and, artifacts, auditLog, emailVerifications, eq, lt, notInArray, notifications, passwordResets, releases, repositories, sessions, sql, webhookDeliveries } from '@jumper/db';
 import type { Ctx } from '../../context';
 import { GitRepo } from '../git/repo';
 import { retentionSettings } from '../instance/settings';
@@ -44,27 +44,29 @@ export async function housekeeping(ctx: Ctx, now = new Date()): Promise<Housekee
 }
 
 /**
- * Remove generated outputs of old commits that nothing points at any more: not the tip of a branch, not a tag and not a
- * release. Release files are stored separately and are never touched.
+ * Remove generated outputs of old commits that nothing points at any more: not the tip of a branch, not a tag (annotated
+ * tags peeled to their commit) and not a release. Release files are stored separately and are never touched.
+ *
+ * Works one repository at a time, visiting every repository with old outputs on each run. (An earlier version took the
+ * first 5,000 old commits across all repositories; once that many were kept tips, it never got past them.)
  */
 async function pruneOutputs(ctx: Ctx, cutoff: Date, held: Set<string>): Promise<number> {
-  const stale = await ctx.db.selectDistinct({ repoId: artifacts.repoId, sha: artifacts.sha }).from(artifacts).where(lt(artifacts.createdAt, cutoff)).limit(5000);
-  const byRepo = new Map<string, string[]>();
-  for (const x of stale) if (!held.has(x.repoId)) byRepo.set(x.repoId, [...(byRepo.get(x.repoId) ?? []), x.sha]);
+  const candidates = await ctx.db.selectDistinct({ repoId: artifacts.repoId }).from(artifacts).where(lt(artifacts.createdAt, cutoff));
   let removed = 0;
-  for (const [repoId, shas] of byRepo) {
+  for (const { repoId } of candidates) {
+    if (held.has(repoId)) continue;
     const exists = (await ctx.db.select({ id: repositories.id }).from(repositories).where(eq(repositories.id, repoId)).limit(1)).length;
     if (!exists) continue;
-    const refs = await new GitRepo(repoDiskPath(ctx, repoId)).refs().catch(() => null);
     // If the repository cannot be read, keep everything rather than guess.
-    if (!refs) continue;
-    const pinned = new Set<string>([...refs.values(), ...(await ctx.db.select({ sha: releases.sha }).from(releases).where(eq(releases.repoId, repoId))).map((x) => x.sha)]);
-    const drop = shas.filter((sha) => !pinned.has(sha));
-    if (!drop.length) continue;
-    const rows = await ctx.db.delete(artifacts).where(and(eq(artifacts.repoId, repoId), inArray(artifacts.sha, drop), lt(artifacts.createdAt, cutoff))).returning({ key: artifacts.storageKey });
+    const kept = await new GitRepo(repoDiskPath(ctx, repoId)).pointedCommits().catch(() => null);
+    if (!kept) continue;
+    for (const r of await ctx.db.select({ sha: releases.sha }).from(releases).where(eq(releases.repoId, repoId))) kept.add(r.sha);
+    const rows = await ctx.db
+      .delete(artifacts)
+      .where(and(eq(artifacts.repoId, repoId), lt(artifacts.createdAt, cutoff), kept.size ? notInArray(artifacts.sha, [...kept]) : undefined))
+      .returning({ key: artifacts.storageKey });
     for (const row of rows) await ctx.storage.deletePrefix(row.key).catch(() => {});
     removed += rows.length;
   }
   return removed;
 }
-

@@ -2,7 +2,7 @@ import { Worker } from 'bullmq';
 import { Redis } from 'ioredis';
 import { createDb } from '@jumper/db';
 import { kicadCore } from '@jumper/kicad-core/node';
-import { QUEUE_ANALYZE, type AnalyzeCommitJob } from '@jumper/shared';
+import { QUEUE_ANALYZE, QUEUE_OUTPUTS, type AnalyzeCommitJob, type CheckStage } from '@jumper/shared';
 import { POSTGRES_HINT, REDIS_HINT, checkServices, watchRedis } from '@jumper/shared/node';
 import { createStorage } from '@jumper/storage';
 import { Analyzer } from './analyze';
@@ -16,7 +16,7 @@ await checkServices([
   { name: 'Redis', url: env.REDIS_URL, defaultPort: 6379, hint: REDIS_HINT },
 ]);
 
-const { db, close: closeDb } = createDb(env.DATABASE_URL, { max: env.WORKER_CONCURRENCY + 2 });
+const { db, close: closeDb } = createDb(env.DATABASE_URL, { max: env.WORKER_CONCURRENCY + env.WORKER_CHECKS_CONCURRENCY + 2 });
 const redis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 const workerRedis = redis.duplicate();
 watchRedis(redis, 'events', (m) => log.error(m), (m) => log.info(m));
@@ -26,32 +26,33 @@ await storage.ensureReady();
 
 const analyzer = new Analyzer({ env, db, redis, storage, kicad: kicadCore() });
 
-const worker = new Worker<AnalyzeCommitJob>(
-  QUEUE_ANALYZE,
-  async (job) => {
-    log.info('job started', { id: job.id, ...job.data });
-    const t0 = Date.now();
-    await analyzer.run(job.data);
-    log.info('job finished', { id: job.id, ms: Date.now() - t0 });
-  },
-  {
-    connection: workerRedis,
-    concurrency: env.WORKER_CONCURRENCY,
-    lockDuration: 120_000,
-  },
-);
+/** One BullMQ worker per lane: the fast lane (ERC, DRC, BOM) never waits behind the slow one (renders, exports). */
+function lane(queue: string, stage: CheckStage, concurrency: number): Worker<AnalyzeCommitJob> {
+  const w = new Worker<AnalyzeCommitJob>(
+    queue,
+    async (job) => {
+      log.info('job started', { id: job.id, stage, ...job.data });
+      const t0 = Date.now();
+      await analyzer.run(job.data, stage);
+      log.info('job finished', { id: job.id, stage, ms: Date.now() - t0 });
+    },
+    { connection: workerRedis, concurrency, lockDuration: 120_000 },
+  );
+  w.on('failed', (job, err) => log.error('job failed', { id: job?.id, stage, error: err.message }));
+  // Connection errors are reported once by watchRedis; log anything else.
+  w.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT' || err.name === 'AggregateError') return;
+    log.error('worker error', { stage, error: err.message || String(err) });
+  });
+  return w;
+}
 
-worker.on('failed', (job, err) => log.error('job failed', { id: job?.id, error: err.message }));
-// Connection errors are reported once by watchRedis; log anything else.
-worker.on('error', (err: NodeJS.ErrnoException) => {
-  if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT' || err.name === 'AggregateError') return;
-  log.error('worker error', { error: err.message || String(err) });
-});
-log.info('worker ready', { queue: QUEUE_ANALYZE, concurrency: env.WORKER_CONCURRENCY, sandbox: env.WORKER_SANDBOX });
+const workers = [lane(QUEUE_ANALYZE, 'checks', env.WORKER_CHECKS_CONCURRENCY), lane(QUEUE_OUTPUTS, 'outputs', env.WORKER_CONCURRENCY)];
+log.info('worker ready', { checks: env.WORKER_CHECKS_CONCURRENCY, outputs: env.WORKER_CONCURRENCY, sandbox: env.WORKER_SANDBOX });
 
 const shutdown = async (signal: string) => {
   log.info('shutting down', { signal });
-  await worker.close();
+  await Promise.all(workers.map((w) => w.close()));
   redis.disconnect();
   await closeDb();
   process.exit(0);
