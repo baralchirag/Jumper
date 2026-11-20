@@ -14,3 +14,15 @@ test-results/
 
 # Internal business notes (not for the repo)
 internal-docs/
+
+# Local planning, design notes and tool output (kept on disk, not in the repository)
+/.impeccable/
+apps/web/.impeccable/
+/docs/
+/plan.md
+/PRODUCT.md
+/DESIGN.md
+/TECH_PLAN.md
+/design.txt
+/jumper-logo.svg
+/jumper-logo-dark.svg
