@@ -47,18 +47,6 @@ describe.skipIf(!dbAvailable)('account deletion', () => {
     expect(login.statusCode).toBe(401);
   });
 
-  it("keeps what the user wrote on other people's repositories, attributed to a ghost account", async () => {
-    await h.repo(alice, 'board');
-    await bob.post('/api/repos/alice/board/issues', { title: 'Bob found a bug', body: 'details' });
-    await bob.post('/api/repos/alice/board/issues/1/comments', { body: 'a comment' });
-    expect((await bob.req('DELETE', '/api/user', { confirm: 'bob', password: PW })).status).toBe(200);
-    const view = await h.anon.get('/api/repos/alice/board/issues/1');
-    expect(view.status).toBe(200);
-    expect(view.json.issue.title).toBe('Bob found a bug');
-    expect(view.json.issue.author.username).toBe('ghost');
-    expect(view.json.comments[0].author.username).toBe('ghost');
-  });
-
   it('frees the username but reserves "ghost"', async () => {
     await bob.req('DELETE', '/api/user', { confirm: 'bob', password: PW });
     await h.user('bob');
@@ -140,79 +128,6 @@ describe.skipIf(!dbAvailable)('organizations', () => {
     expect((await q(h, sql`select 1 from repositories where id = ${row[0]!.id as string}`)).length).toBe(0);
     // The name is free again.
     expect((await alice.post('/api/orgs', { slug: 'acme', name: 'Acme again' })).status).toBe(200);
-  });
-});
-
-describe.skipIf(!dbAvailable)('forks', () => {
-  let h: Harness;
-  let alice: Client, bob: Client, carol: Client;
-  beforeAll(async () => {
-    h = await createHarness();
-  });
-  afterAll(() => h.close());
-  beforeEach(async () => {
-    await h.reset();
-    alice = await h.user('alice');
-    bob = await h.user('bob');
-    carol = await h.user('carol');
-  });
-
-  it('copies history into the forker’s account and stays independent', async () => {
-    const src = await h.repo(alice, 'board');
-    const sha = await commitFiles(src.git, { 'README.md': '# board', 'hw/a.kicad_pcb': '(kicad_pcb)' });
-    await commitFiles(src.git, { 'README.md': '# v2' }, { branch: 'dev' });
-    const res = await bob.post('/api/repos/alice/board/fork', {});
-    expect(res.status).toBe(200);
-    expect(res.json).toMatchObject({ owner: 'bob', name: 'board', forkOf: { owner: 'alice', name: 'board' }, permission: 'admin' });
-    const tree = await h.anon.get(`/api/repos/bob/board/tree?ref=${sha}`);
-    expect(tree.status).toBe(200);
-    const branches = await h.anon.get('/api/repos/bob/board/branches');
-    expect(branches.json.map((b: { name: string }) => b.name).sort()).toEqual(['dev', 'main']);
-    const info = await h.anon.get('/api/repos/bob/board');
-    expect(info.json.forkOf).toEqual({ owner: 'alice', name: 'board' });
-    expect((await h.anon.get('/api/repos/alice/board')).json.forkCount).toBe(1);
-    expect((await h.anon.get('/api/repos/alice/board/forks')).json.map((f: { fullName: string }) => f.fullName)).toEqual(['bob/board']);
-    // Pushing to the fork's branch leaves the original alone.
-    const fork = (await q(h, sql`select r.id from repositories r where r.name = 'board' and r.fork_of_id is not null`))[0]!.id as string;
-    expect(fork).not.toBe(src.id);
-    await commitFiles(src.git, { 'README.md': '# only in original' }, { branch: 'main' });
-    const forkMain = (await h.anon.get('/api/repos/bob/board/branches')).json.find((b: { name: string }) => b.name === 'main').sha;
-    expect(forkMain).toBe(sha);
-  });
-
-  it('rejects forking into yourself, name clashes, empty repositories and anonymous callers', async () => {
-    await h.repo(alice, 'empty');
-    expect((await bob.post('/api/repos/alice/empty/fork', {})).status).toBe(400);
-    const src = await h.repo(alice, 'board');
-    await commitFiles(src.git, { 'a.txt': 'x' });
-    expect((await alice.post('/api/repos/alice/board/fork', {})).status).toBe(409);
-    expect((await h.anon.post('/api/repos/alice/board/fork', {})).status).toBe(401);
-    expect((await bob.post('/api/repos/alice/board/fork', {})).status).toBe(200);
-    expect((await bob.post('/api/repos/alice/board/fork', {})).status).toBe(409);
-    expect((await bob.post('/api/repos/alice/board/fork', { name: 'board-2' })).status).toBe(200);
-    expect((await bob.post('/api/repos/alice/board/fork', { owner: 'carol', name: 'x' })).status).toBe(403);
-  });
-
-  it('does not let people without access fork or discover private repositories', async () => {
-    const src = await h.repo(alice, 'secret', { visibility: 'private' });
-    await commitFiles(src.git, { 'a.txt': 'x' });
-    expect((await carol.post('/api/repos/alice/secret/fork', {})).status).toBe(404);
-    expect((await alice.put('/api/repos/alice/secret/collaborators/bob', { role: 'read' })).status).toBe(200);
-    const forked = await bob.post('/api/repos/alice/secret/fork', {});
-    expect(forked.status).toBe(200);
-    expect(forked.json.visibility).toBe('private');
-    expect((await carol.get('/api/repos/bob/secret')).status).toBe(404);
-    expect((await carol.get('/api/repos/alice/secret/forks')).status).toBe(404);
-  });
-
-  it('survives deletion of the original', async () => {
-    const src = await h.repo(alice, 'board');
-    await commitFiles(src.git, { 'a.txt': 'x' });
-    await bob.post('/api/repos/alice/board/fork', {});
-    expect((await alice.del('/api/repos/alice/board')).status).toBe(200);
-    const info = await h.anon.get('/api/repos/bob/board');
-    expect(info.status).toBe(200);
-    expect(info.json.forkOf).toBeNull();
   });
 });
 

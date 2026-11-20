@@ -13,6 +13,7 @@ const siteRoutes: FastifyPluginAsyncZod = async (app) => {
       operator: { name: env.OPERATOR_NAME ?? null, email: env.OPERATOR_EMAIL ?? null, jurisdiction: env.OPERATOR_JURISDICTION ?? null },
       legalUpdated: env.LEGAL_UPDATED ?? null,
       signup: env.ALLOW_SIGNUP,
+      plansEnforced: env.PLANS_ENFORCED,
       fabLinks: {
         jlcpcb: link(env.FAB_REFERRAL_JLCPCB, FAB_ORDER_PAGES.jlcpcb),
         pcbway: link(env.FAB_REFERRAL_PCBWAY, FAB_ORDER_PAGES.pcbway),

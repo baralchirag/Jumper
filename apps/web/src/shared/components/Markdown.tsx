@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { cx } from '@jumper/ui';
 import { renderMarkdown, type MarkdownContext } from '../lib/markdown';
 
-/** Markdown context for text written inside a repository (#refs link to its pull requests). */
+/** Markdown context for text written inside a repository (relative links resolve inside it). */
 export function useRepoMarkdownCtx(owner: string, name: string, breaks = false): MarkdownContext {
   return useMemo(() => ({ repo: { owner, name }, breaks }), [owner, name, breaks]);
 }

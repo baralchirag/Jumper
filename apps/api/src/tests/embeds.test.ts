@@ -41,7 +41,6 @@ describe.skipIf(!dbAvailable)('README embeds', () => {
     expect((await h.app.inject({ method: 'GET', url: '/api/repos/alice/board/badge.svg?check=DRC' })).body).toContain('DRC: passing');
     expect((await h.app.inject({ method: 'GET', url: '/api/repos/alice/board/badge.svg' })).body).toContain('checks: failing');
     expect((await h.app.inject({ method: 'GET', url: '/api/repos/alice/board/badge.svg?label=%3Cscript%3E' })).body).not.toContain('<script>');
-    expect((await h.app.inject({ method: 'GET', url: '/api/repos/alice/board/badge/release.svg' })).body).toContain('release: none');
   });
 
   it('shows the newest board picture, falling back to earlier commits and simpler views', async () => {

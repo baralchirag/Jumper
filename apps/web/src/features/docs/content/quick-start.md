@@ -1,47 +1,60 @@
 # Quick start
 
-Five minutes from a KiCad folder on your disk to a reviewed board. Jumper hosts KiCad projects in git and turns every push into something you can check: rendered schematics and boards, ERC and DRC results, a priced BOM, 3D views and a fab package.
+Jumper works next to GitHub. Your KiCad project stays where it is; Jumper follows it and turns every commit into something you can check: rendered schematics and boards, ERC and DRC results, a priced BOM, a visual diff against any other revision, and a fab package.
 
 > [!TIP]
-> Just looking? Choose **Try the example board** on your dashboard. It creates a private repository with a small board that passes every check, so you can explore before pushing your own.
+> Just looking? Choose **Example board** when you create a repository. You get a small board that passes every check, so you can explore before connecting your own.
 
-## 1. Create a repository
+## 1. Connect your repository
 
-Open **+ → New repository**. Name it after the board or product (`power-supply-v2`), choose who can see it, and pick a starting point:
+Open **+ → New repository** and choose **Connect from GitHub**:
 
-- **Empty**: you push an existing project (most common).
-- **Example board**: a complete KiCad project to experiment with.
-- **Import from a URL**: copy a repository from GitHub, GitLab or any git host, history included.
+1. Paste the address you would use with `git clone`, for example `https://github.com/acme/power-supply.git`.
+2. For a private repository, open **This repository is private** and add a GitHub username and a [fine-grained token](https://github.com/settings/personal-access-tokens) with read access to that one repository. It is stored encrypted.
+3. Leave **After importing** on *Keep pulling new commits from the original*.
 
-Leave *Initialize with README* unticked if you are about to push an existing project, so the first push does not conflict.
+Jumper copies every branch and tag, then pulls new commits on a schedule. Each new commit is analyzed the moment it arrives. GitLab, Gitea and any other host that serves git over HTTPS work the same way. More in [Mirroring with GitHub & GitLab](/docs/mirroring).
 
-## 2. Create an access token
+**Prefer to push to Jumper directly?** Choose **Empty repository** instead, then follow [Pushing directly](#pushing-directly) below.
 
-Git over HTTPS asks for a username and password. Use your **username** and a **personal access token** as the password. Create one under [Settings → Personal access tokens](/settings/tokens) with the `repo:write` scope, then copy it straight away: it is shown only once.
+## 2. Read the checks
 
-```sh
-# Optional: remember it after the first push
-git config --global credential.helper store
-```
+Each new commit gets two passes. The quick one (ERC, DRC, BOM) usually reports within a minute; renders and manufacturing files follow.
 
-## 3. Push your KiCad project
+| Check   | What it does                                            |
+| ------- | ------------------------------------------------------- |
+| ERC     | `kicad-cli sch erc` on every schematic                  |
+| DRC     | `kicad-cli pcb drc`, with schematic parity              |
+| BOM     | Groups parts, prices them, diffs against the parent commit |
+| Render  | SVG sheets and layers, 3D views                         |
+| Exports | Gerbers, drill, pick-and-place, PDFs, STEP, fab package |
+
+Open the **Checks** tab to see violations grouped by rule. **Locate** jumps to the exact spot on the schematic or board. Download the fab package from **Outputs**. Choose which checks run, and how strict they are, in [`.jumper.yml`](/docs/jumper-yml).
+
+## 3. See what changed
+
+Open **Compare**, pick two branches, tags or commits, and Jumper shows what changed in the *design*, not in the text of the files: parts added, removed or changed, nets rerouted, and the board side by side, overlaid, swiped or in 3D. Every commit page shows the same diff against its parent.
+
+Reviewing a GitHub pull request? Compare its branch with `main` on Jumper and paste the link into the pull request.
+
+## Pushing directly
+
+Git over HTTPS asks for a username and password. Use your **username** and a **personal access token** as the password. Create one under [Settings → Personal access tokens](/settings/tokens) with the `repo:write` scope; it is shown only once. SSH keys work too ([Git over SSH](/docs/ssh)), and so does the [KiCad plugin](/docs/kicad-plugin).
 
 From the folder that contains your `.kicad_pro`, `.kicad_sch` and `.kicad_pcb` files:
 
 ```sh
-cd ~/kicad/power-supply-v2
+cd ~/kicad/power-supply
 git init -b main
 git add .
 git commit -m "Rev A"
-git remote add origin https://jumper.example/you/power-supply-v2.git
+git remote add origin https://jumper.example/you/power-supply.git
 git push -u origin main
 ```
 
-The empty repository page shows these commands with your real URL, and refreshes on its own when the push arrives.
+**Already on GitHub?** Add Jumper as a second remote: `git remote add jumper <url>`, then `git push -u jumper --all`.
 
-**Already using git?** Add Jumper as a second remote: `git remote add jumper <url>`, then `git push -u jumper --all`.
-
-**What to commit:** the project, schematic and board files, plus any custom symbol, footprint and 3D-model libraries the project uses (keep them under the project folder and reference them with `${KIPRJMOD}`). Leave out backups and caches. The `.gitignore` Jumper suggests does this for you:
+**What to commit:** the project, schematic and board files, plus any custom symbol, footprint and 3D-model libraries the project uses (keep them under the project folder and reference them with `${KIPRJMOD}`). Leave out backups and caches:
 
 ```gitignore
 *.kicad_prl
@@ -52,35 +65,8 @@ fp-info-cache
 *.lck
 ```
 
-## 4. Read the checks
-
-Each push runs the checks below. Results appear on the commit, the repository page and every pull request.
-
-| Check   | What it does                                            | Blocks merges            |
-| ------- | ------------------------------------------------------- | ------------------------ |
-| ERC     | `kicad-cli sch erc` on every schematic                  | yes (by default)         |
-| DRC     | `kicad-cli pcb drc`, with schematic parity              | yes (by default)         |
-| BOM     | Groups parts, diffs against the parent commit           | only if you require it   |
-| Render  | SVG sheets and layers, ray-traced 3D views              | no                       |
-| Exports | Gerbers, drill, pick-and-place, PDFs, STEP, fab package | no                       |
-
-Open the **Checks** tab to see violations grouped by rule. **Locate** jumps to the exact spot on the schematic or board. Download the fab package from **Outputs**.
-
-## 5. Review a change
-
-Make the change in KiCad on a branch, push it, and open a pull request from **Compare**:
-
-```sh
-git switch -c bigger-cap
-# edit in KiCad, save
-git commit -am "C4: 10 µF → 22 µF"
-git push -u origin bigger-cap
-```
-
-Reviewers see what changed in the *design*, not in the text of the files: parts added, removed or changed, nets rerouted, and the board side by side, overlaid, swiped or in 3D. They can comment on a footprint, pad or track. Merge once the required checks pass and the approvals are in.
-
 ## Next
 
-- Choose which checks run and what they block in [`.jumper.yml`](/docs/jumper-yml).
-- Invite collaborators or create an organization: [Accounts, organizations & forks](/docs/accounts).
+- Tune checks and outputs in [`.jumper.yml`](/docs/jumper-yml).
+- Add your team: [Accounts & organizations](/docs/accounts).
 - Something not working? See [Troubleshooting & FAQ](/docs/faq).

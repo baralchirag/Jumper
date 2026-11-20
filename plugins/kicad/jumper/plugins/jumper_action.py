@@ -101,9 +101,9 @@ class JumperDialog(wx.Dialog):
         self.btn_push.SetToolTip("Save every change in a commit and send it to Jumper")
         self.btn_web = wx.Button(panel, label="Open on Jumper")
         self.btn_branch = wx.Button(panel, label="New branch…")
-        self.btn_branch.SetToolTip("Work on a change in its own branch, then open a pull request for review")
-        self.btn_pr = wx.Button(panel, label="Open pull request")
-        self.btn_pr.SetToolTip("Ask your team to review this branch on Jumper, board against board")
+        self.btn_branch.SetToolTip("Work on a change in its own branch, then compare it with main on Jumper")
+        self.btn_pr = wx.Button(panel, label="Compare on Jumper")
+        self.btn_pr.SetToolTip("See this branch against main on Jumper, board against board")
         self.btn_token = wx.Button(panel, label="Token…")
         self.btn_close = wx.Button(panel, wx.ID_CANCEL, label="Close")
         for b in (self.btn_pull, self.btn_push, self.btn_branch, self.btn_pr, self.btn_web, self.btn_token):
@@ -286,7 +286,7 @@ class JumperDialog(wx.Dialog):
             name = dlg.GetValue()
 
             def done(branch):
-                self.say("Switched to %s. Commit and push, then open a pull request." % branch)
+                self.say("Switched to %s. Commit and push, then compare it on Jumper." % branch)
                 self.refresh()
 
             self.in_background(lambda: g.create_branch(self.root, name), done)
@@ -313,7 +313,7 @@ class JumperPlugin(pcbnew.ActionPlugin):
     def defaults(self):
         self.name = "Jumper"
         self.category = "Version control"
-        self.description = "Jumper: commit, push and pull this project, open pull requests and see check results, without leaving KiCad."
+        self.description = "Jumper: commit, push and pull this project, compare branches and see check results, without leaving KiCad."
         self.show_toolbar_button = True
         self.icon_file_name = os.path.join(os.path.dirname(__file__), "icon.png")
 

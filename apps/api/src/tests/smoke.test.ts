@@ -31,7 +31,7 @@ describe('app', () => {
     const res = await app.inject({ method: 'GET', url: '/api/docs/json' });
     expect(res.statusCode).toBe(200);
     const doc = res.json() as { paths: Record<string, unknown> };
-    expect(Object.keys(doc.paths)).toEqual(expect.arrayContaining(['/api/repos/{owner}/{repo}/pulls/{number}/merge', '/api/repos/{owner}/{repo}/semantic-diff']));
+    expect(Object.keys(doc.paths)).toEqual(expect.arrayContaining(['/api/repos/{owner}/{repo}/compare', '/api/repos/{owner}/{repo}/semantic-diff']));
   });
 
   it('rejects invalid bodies with 400', async () => {

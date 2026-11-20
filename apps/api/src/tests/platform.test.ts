@@ -15,6 +15,7 @@ async function until(cond: () => boolean, ms = 5000) {
 describe.skipIf(!dbAvailable)('webhooks', () => {
   let h: Harness;
   let alice: Client, bob: Client;
+  let board: { id: string };
   let server: Server;
   let received: { headers: IncomingMessage['headers']; body: string }[] = [];
   let status = 200;
@@ -42,14 +43,16 @@ describe.skipIf(!dbAvailable)('webhooks', () => {
     status = 200;
     alice = await h.user('alice');
     bob = await h.user('bob');
-    await h.repo(alice, 'board');
+    board = await h.repo(alice, 'board');
   });
+  // A push event, as the git endpoints publish it after a successful push.
+  const push = () => h.ctx.publish({ type: 'push', repoId: board.id, ref: 'refs/heads/main', before: null, after: 'a'.repeat(40) });
   const url = () => `http://127.0.0.1:${(server.address() as AddressInfo).port}/hook`;
 
   it('is admin-only and hides the secret after creation', async () => {
     expect((await bob.get('/api/repos/alice/board/hooks')).status).toBe(403);
     expect((await h.anon.post('/api/repos/alice/board/hooks', { url: url() })).status).toBe(401);
-    const created = await alice.post('/api/repos/alice/board/hooks', { url: url(), events: ['issues'] });
+    const created = await alice.post('/api/repos/alice/board/hooks', { url: url(), events: ['push'] });
     expect(created.status).toBe(200);
     expect(created.json.secret).toMatch(/.{16,}/);
     const list = await alice.get('/api/repos/alice/board/hooks');
@@ -57,27 +60,27 @@ describe.skipIf(!dbAvailable)('webhooks', () => {
   });
 
   it('delivers signed events and records the delivery', async () => {
-    const created = await alice.post('/api/repos/alice/board/hooks', { url: url(), events: ['issues'], secret: 'a-very-long-shared-secret' });
-    await alice.post('/api/repos/alice/board/issues', { title: 'Hello hooks' });
+    const created = await alice.post('/api/repos/alice/board/hooks', { url: url(), events: ['push'], secret: 'a-very-long-shared-secret' });
+    await push();
     expect(await until(() => received.length > 0)).toBe(true);
     const got = received[0]!;
     const expected = 'sha256=' + createHmac('sha256', 'a-very-long-shared-secret').update(got.body).digest('hex');
     expect(got.headers['x-jumper-signature-256']).toBe(expected);
-    expect(got.headers['x-jumper-event']).toBe('issues');
+    expect(got.headers['x-jumper-event']).toBe('push');
     const payload = JSON.parse(got.body);
-    expect(payload).toMatchObject({ event: 'issues', action: 'opened', number: 1, repository: { fullName: 'alice/board' } });
+    expect(payload).toMatchObject({ event: 'push', ref: 'refs/heads/main', after: 'a'.repeat(40), repository: { fullName: 'alice/board' } });
     await until(() => false, 200);
     const deliveries = await alice.get(`/api/repos/alice/board/hooks/${created.json.id}/deliveries`);
-    expect(deliveries.json[0]).toMatchObject({ event: 'issues', status: 200 });
+    expect(deliveries.json[0]).toMatchObject({ event: 'push', status: 200 });
   });
 
   it('only sends subscribed events and skips inactive hooks', async () => {
-    const created = await alice.post('/api/repos/alice/board/hooks', { url: url(), events: ['push'] });
-    await alice.post('/api/repos/alice/board/issues', { title: 'not subscribed' });
+    const created = await alice.post('/api/repos/alice/board/hooks', { url: url(), events: ['check'] });
+    await push();
     await sleep(300);
     expect(received).toHaveLength(0);
-    await alice.patch(`/api/repos/alice/board/hooks/${created.json.id}`, { events: ['issues'], active: false });
-    await alice.post('/api/repos/alice/board/issues', { title: 'inactive' });
+    await alice.patch(`/api/repos/alice/board/hooks/${created.json.id}`, { events: ['push'], active: false });
+    await push();
     await sleep(300);
     expect(received).toHaveLength(0);
   });

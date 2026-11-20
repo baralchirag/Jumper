@@ -12,6 +12,8 @@ export interface SiteInfo {
   /** YYYY-MM-DD the legal pages last changed, or null. */
   legalUpdated: string | null;
   signup: boolean;
+  /** Hosted instance with plan limits on: organizations need a paid plan. False on self-hosted instances. */
+  plansEnforced: boolean;
   /** Where to order each fab package; `referral` is true when the operator set its own (referral) link. */
   fabLinks: Record<'jlcpcb' | 'pcbway' | 'oshpark', { url: string; referral: boolean }>;
 }

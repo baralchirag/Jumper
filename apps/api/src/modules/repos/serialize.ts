@@ -24,7 +24,7 @@ export function toRepoInfo(
   repo: Repository,
   ns: Namespace,
   permission: Permission,
-  extra: { isEmpty?: boolean; openPullCount?: number; starCount?: number; starred?: boolean; forkOf?: { owner: string; name: string } | null; forkCount?: number; access?: { caps: Set<Capability>; customRole: string | null }; legalHold?: boolean } = {},
+  extra: { isEmpty?: boolean; access?: { caps: Set<Capability>; customRole: string | null }; legalHold?: boolean } = {},
 ): RepoInfo {
   return {
     id: repo.id,
@@ -45,13 +45,7 @@ export function toRepoInfo(
     customRole: extra.access?.customRole ?? null,
     exportControlled: repo.exportControlled,
     legalHold: extra.legalHold ?? false,
-    openPullCount: extra.openPullCount ?? 0,
-    starCount: extra.starCount ?? 0,
-    starred: extra.starred ?? false,
     cloneUrl: cloneUrl(ctx, ns, repo),
     sshCloneUrl: sshCloneUrl(ctx, ns, repo),
-    forkOf: extra.forkOf ?? null,
-    forkCount: extra.forkCount ?? 0,
-    featured: repo.featuredAt !== null,
   };
 }

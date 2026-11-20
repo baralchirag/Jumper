@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { CircleDot, Code, Cpu, FileText, FolderGit2, MessagesSquare, Search as SearchIcon, Spline, Star } from 'lucide-react';
+import { Code, Cpu, FileText, FolderGit2, Search as SearchIcon, Spline } from 'lucide-react';
 import type { SearchHit, SearchResults, SearchType } from '@jumper/shared';
 import { Box, EmptyState, Label, PageSpinner, RelativeTime, cx } from '@jumper/ui';
 import { PageContainer } from '../../shared/components/common';
@@ -14,7 +14,6 @@ const TABS: { type: SearchType; label: string; icon: ReactNode }[] = [
   { type: 'nets', label: 'Nets', icon: <Spline size={15} /> },
   { type: 'files', label: 'Files', icon: <FileText size={15} /> },
   { type: 'code', label: 'Code', icon: <Code size={15} /> },
-  { type: 'issues', label: 'Issues', icon: <CircleDot size={15} /> },
 ];
 
 export type SearchParams = { q?: string; type?: SearchType };
@@ -54,9 +53,6 @@ function Hit({ h, q, showRepo }: { h: SearchHit; q: string; showRepo: boolean })
             {h.repo.owner}/<Highlight text={h.repo.name} q={q} />
           </Link>
           <span className="min-w-0 flex-1 truncate text-fg-muted">{h.description}</span>
-          <span className="flex items-center gap-1 text-xs text-fg-muted">
-            <Star size={12} aria-hidden /> {h.stars}
-          </span>
           <span className="text-xs text-fg-muted">
             <RelativeTime date={h.updatedAt} />
           </span>
@@ -118,25 +114,6 @@ function Hit({ h, q, showRepo }: { h: SearchHit; q: string; showRepo: boolean })
           <RepoChip repo={h.repo} show={showRepo} />
         </li>
       );
-    case 'issues':
-      return (
-        <li className={base}>
-          <span className={h.state === 'open' ? 'text-success' : 'text-done'} aria-label={h.state}>
-            {h.kind === 'discussion' ? <MessagesSquare size={15} /> : <CircleDot size={15} />}
-          </span>
-          <Link
-            to={h.kind === 'discussion' ? '/$owner/$repo/discussions/$number' : '/$owner/$repo/issues/$number'}
-            params={{ owner: h.repo.owner, repo: h.repo.name, number: String(h.number) }}
-            className="min-w-0 flex-1 truncate font-medium hover:text-accent"
-          >
-            <Highlight text={h.title} q={q} /> <span className="font-normal text-fg-muted">#{h.number}</span>
-          </Link>
-          <RepoChip repo={h.repo} show={showRepo} />
-          <span className="text-xs text-fg-muted">
-            <RelativeTime date={h.updatedAt} />
-          </span>
-        </li>
-      );
   }
 }
 
@@ -146,7 +123,6 @@ const EMPTY_HELP: Record<SearchType, string> = {
   nets: 'No nets match. Nets come from the netlist export (outputs.netlist in .jumper.yml).',
   files: 'No file names match.',
   code: 'No text in the default branch matches.',
-  issues: 'No issues or discussions match.',
 };
 
 function SearchView({ fetcher, scope, defaultType, search, setSearch }: { fetcher: (q: string, type: SearchType) => Promise<SearchResults>; scope: string; defaultType: SearchType; search: SearchParams; setSearch: (s: SearchParams) => void }) {
@@ -168,7 +144,7 @@ function SearchView({ fetcher, scope, defaultType, search, setSearch }: { fetche
           value={value}
           onChange={(e) => setValue(e.target.value)}
           autoFocus
-          placeholder={scope === 'global' ? 'Search repositories, parts, nets, files and issues' : 'Search this repository'}
+          placeholder={scope === 'global' ? 'Search repositories, parts, nets and files' : 'Search this repository'}
           aria-label="Search"
           className="h-11 w-full rounded-full border border-border bg-canvas pl-11 pr-4 text-[15px] shadow-subtle placeholder:text-fg-subtle focus:border-select focus:outline-none focus:shadow-[0_0_0_4px_var(--pcb-accent-subtle)]"
         />
@@ -211,7 +187,7 @@ function SearchView({ fetcher, scope, defaultType, search, setSearch }: { fetche
           </div>
         </div>
       )}
-      {!q && <p className="text-sm text-fg-muted">Search part numbers (<Label>TPS2051</Label>), footprints, net names (<Label>USB_D+</Label>), file names and issues.</p>}
+      {!q && <p className="text-sm text-fg-muted">Search part numbers (<Label>TPS2051</Label>), footprints, net names (<Label>USB_D+</Label>) and file names.</p>}
     </div>
   );
 }

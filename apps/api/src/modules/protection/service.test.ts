@@ -33,13 +33,14 @@ describe('validatePattern', () => {
 describe('effectiveFor / hookRules', () => {
   it('combines matching rules and exempts admins unless enforced', () => {
     const rules = [rule({ pattern: 'main', requirePullRequest: true }), rule({ pattern: 'rel*', blockForcePush: false, enforceAdmins: true })];
-    expect(effectiveFor(rules, 'main', false)).toMatchObject({ requirePullRequest: true, blockDeletion: true });
+    expect(effectiveFor(rules, 'main', false)).toEqual({ blockDeletion: true, blockForcePush: true });
     expect(effectiveFor(rules, 'main', true)).toBeNull();
     expect(effectiveFor(rules, 'release', true)).toMatchObject({ blockForcePush: false, blockDeletion: true });
     expect(effectiveFor(rules, 'feature', false)).toBeNull();
   });
   it('serialises flags for the hook', () => {
-    expect(hookRules([rule({ pattern: 'main', requirePullRequest: true })], false)).toBe('main\tDFP');
+    // Old rows with require_pull_request set must not lock anyone out.
+    expect(hookRules([rule({ pattern: 'main', requirePullRequest: true })], false)).toBe('main\tDF');
     expect(hookRules([rule({ pattern: 'main' })], true)).toBe('');
   });
 });

@@ -100,7 +100,9 @@ describe.skipIf(!dbAvailable)('enforced plan limits', () => {
     const alice = await h.user('alice');
     await h.user('bob');
     await h.user('carol');
-    await alice.post('/api/orgs', { slug: 'acme', name: 'Acme' });
+    // Organizations need a paid plan on an enforced instance; the org itself starts on Free (2 seats in this test).
+    await h.ctx.db.execute(sql`update namespaces set plan = 'pro' where slug = 'alice'`);
+    expect((await alice.post('/api/orgs', { slug: 'acme', name: 'Acme' })).status).toBe(200);
     expect((await alice.put('/api/orgs/acme/members', { username: 'bob', role: 'member' })).status).toBe(200);
     const full = await alice.put('/api/orgs/acme/members', { username: 'carol', role: 'member' });
     expect(full.status).toBe(403);

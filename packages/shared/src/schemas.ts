@@ -4,18 +4,14 @@ import type { PlanId } from './plans';
 import {
   CHECK_CONCLUSIONS,
   CHECK_STATUSES,
-  MERGE_METHODS,
   REPO_ROLES,
-  REVIEW_STATES,
   TOKEN_SCOPES,
   type ArtifactKind,
   type CheckConclusion,
   type CheckName,
   type CheckStatus,
-  type PrState,
   type Capability,
   type RepoRole,
-  type ReviewState,
 } from './constants';
 
 const RESERVED_NAMES = new Set([
@@ -188,43 +184,6 @@ export const lineAnchorSchema = z.object({
 export const commentAnchorSchema = z.discriminatedUnion('type', [objectAnchorSchema, lineAnchorSchema]);
 export type CommentAnchor = z.infer<typeof commentAnchorSchema>;
 
-export const createPullSchema = z.object({
-  title: z.string().min(1).max(256),
-  body: z.string().max(65536).default(''),
-  base: branchNameSchema,
-  head: branchNameSchema,
-});
-
-export const updatePullSchema = z.object({
-  title: z.string().min(1).max(256).optional(),
-  body: z.string().max(65536).optional(),
-  state: z.enum(['open', 'closed']).optional(),
-});
-
-export const createCommentSchema = z.object({
-  body: z.string().min(1).max(65536),
-  anchor: commentAnchorSchema.optional(),
-  inReplyTo: z.uuid().optional(),
-});
-
-export const updateCommentSchema = z.object({
-  body: z.string().min(1).max(65536).optional(),
-  resolved: z.boolean().optional(),
-});
-
-export const createReviewSchema = z.object({
-  state: z.enum(REVIEW_STATES),
-  body: z.string().max(65536).default(''),
-  comments: z.array(z.object({ body: z.string().min(1).max(65536), anchor: commentAnchorSchema })).max(200).default([]),
-});
-
-export const mergePullSchema = z.object({
-  method: z.enum(MERGE_METHODS).default('merge'),
-  title: z.string().max(256).optional(),
-  message: z.string().max(65536).optional(),
-  deleteBranch: z.boolean().default(false),
-});
-
 export const checkStatusSchema = z.enum(CHECK_STATUSES);
 export const checkConclusionSchema = z.enum(CHECK_CONCLUSIONS);
 
@@ -302,7 +261,7 @@ export interface AdminTablePage {
 }
 
 export interface AdminOverview {
-  counts: { users: number; orgs: number; repos: number; pulls: number; checks: number; artifacts: number; stars: number; sessions: number };
+  counts: { users: number; orgs: number; repos: number; checks: number; artifacts: number; sessions: number };
   checks: { conclusion: string | null; status: string; n: number }[];
   storageBytes: number;
   repoBytes: number;
@@ -345,18 +304,9 @@ export interface RepoInfo {
   exportControlled: boolean;
   /** Under legal hold: nothing in it can be deleted. */
   legalHold: boolean;
-  openPullCount: number;
-  starCount: number;
-  /** Whether the signed-in viewer starred it; false for anonymous viewers. */
-  starred: boolean;
   cloneUrl: string;
   /** SSH clone URL, or null when the server does not run SSH. */
   sshCloneUrl: string | null;
-  /** The repository this one was forked from, when it still exists. */
-  forkOf: { owner: string; name: string } | null;
-  /** Picked by an administrator for the Explore page. */
-  featured?: boolean;
-  forkCount: number;
 }
 
 export interface NamespaceInfo {
@@ -369,18 +319,13 @@ export interface NamespaceInfo {
   location?: string | null;
   company?: string | null;
   pronouns?: string | null;
-  starCount?: number;
   createdAt: string;
   repos: RepoInfo[];
   members?: (UserSummary & { role: 'owner' | 'member' })[];
   /** Repositories the owner pinned to the top of the profile, in order (only ones the viewer can see). */
   pinned?: RepoInfo[];
-  /** Portfolio figures across the public work shown here. */
-  stats?: { repos: number; releases: number; starsReceived: number; forksReceived: number };
-  /** People (users only). `viewerFollows` is false for signed-out viewers. */
-  followers?: number;
-  following?: number;
-  viewerFollows?: boolean;
+  /** Public repositories shown here. */
+  stats?: { repos: number };
   /** The owner's plan; shown as a badge for paid plans. */
   plan?: PlanId;
 }
@@ -417,19 +362,8 @@ export interface InvitePreview {
   alreadyMember: boolean;
 }
 
-export interface FollowList {
-  users: (UserSummary & { bio: string | null; viewerFollows: boolean })[];
-  nextPage: number | null;
-}
-
 export const pinsSchema = z.object({ repos: z.array(z.string().min(1).max(100)).max(6) });
 
-export interface ExploreInfo {
-  featured: RepoInfo[];
-  /** Most activity in the last two weeks: new stars, forks, merged pull requests and releases. */
-  trending: RepoInfo[];
-  recent: RepoInfo[];
-}
 
 export interface GitSignature {
   name: string;
@@ -557,42 +491,6 @@ export interface ArtifactInfo {
   url: string;
 }
 
-export interface PullInfo {
-  id: string;
-  number: number;
-  title: string;
-  body: string;
-  state: PrState;
-  author: UserSummary;
-  base: string;
-  head: string;
-  baseSha: string;
-  headSha: string;
-  mergeCommitSha: string | null;
-  mergedBy: UserSummary | null;
-  mergedAt: string | null;
-  closedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  commentCount: number;
-  reviewSummary: { approved: number; changesRequested: number };
-}
-
-export interface Mergeability {
-  mergeable: boolean;
-  conflicts: string[];
-  canFastForward: boolean;
-  checks: { name: string; state: 'success' | 'failure' | 'pending' | 'missing' }[];
-  approvals: number;
-  requiredApprovals: number;
-  changesRequested: boolean;
-  blockers: string[];
-}
-
-export interface PullDetail extends PullInfo {
-  mergeability: Mergeability | null;
-}
-
 export interface CommentInfo {
   id: string;
   author: UserSummary;
@@ -604,28 +502,6 @@ export interface CommentInfo {
   createdAt: string;
   updatedAt: string;
 }
-
-export interface ReviewInfo {
-  id: string;
-  author: UserSummary;
-  state: ReviewState;
-  body: string;
-  commitSha: string;
-  createdAt: string;
-}
-
-export interface PullEventInfo {
-  id: string;
-  actor: UserSummary | null;
-  kind: 'opened' | 'closed' | 'reopened' | 'merged' | 'pushed' | 'renamed' | 'base_changed';
-  data: Record<string, unknown>;
-  createdAt: string;
-}
-
-export type TimelineItem =
-  | ({ itemType: 'comment' } & CommentInfo)
-  | ({ itemType: 'review'; comments: CommentInfo[] } & ReviewInfo)
-  | ({ itemType: 'event' } & PullEventInfo);
 
 export interface ApiErrorBody {
   error: string;

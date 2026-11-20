@@ -10,7 +10,6 @@ const ForgotPage = lazyRouteComponent(() => import('../features/auth/Reset'), 'F
 const ResetPage = lazyRouteComponent(() => import('../features/auth/Reset'), 'ResetPage');
 const LoginPage = lazyRouteComponent(() => import('../features/auth/Auth'), 'LoginPage');
 const SignupPage = lazyRouteComponent(() => import('../features/auth/Auth'), 'SignupPage');
-const ExplorePage = lazyRouteComponent(() => import('../features/home/Explore'), 'ExplorePage');
 const HomePage = lazyRouteComponent(() => import('../features/home/Home'), 'HomePage');
 const NewOrgPage = lazyRouteComponent(() => import('../features/accounts/NewOrg'), 'NewOrgPage');
 const NewRepoPage = lazyRouteComponent(() => import('../features/accounts/NewRepo'), 'NewRepoPage');
@@ -20,7 +19,6 @@ const AdminOverviewPage = lazyRouteComponent(() => import('../features/admin/Adm
 const AdminUsersPage = lazyRouteComponent(() => import('../features/admin/Admin'), 'AdminUsersPage');
 const DocsPage = lazyRouteComponent(() => import('../features/docs/Docs'), 'DocsPage');
 const SettingsPage = lazyRouteComponent(() => import('../features/settings/Settings'), 'SettingsPage');
-const StarsPage = lazyRouteComponent(() => import('../features/home/Stars'), 'StarsPage');
 const BlobPage = lazyRouteComponent(() => import('../features/repo/Blob'), 'BlobPage');
 const BranchesPage = lazyRouteComponent(() => import('../features/repo/Branches'), 'BranchesPage');
 const ChecksPage = lazyRouteComponent(() => import('../features/repo/Checks'), 'ChecksPage');
@@ -30,22 +28,10 @@ const CommitsPage = lazyRouteComponent(() => import('../features/repo/Commits'),
 const ComparePage = lazyRouteComponent(() => import('../features/repo/Compare'), 'ComparePage');
 const OutputsPage = lazyRouteComponent(() => import('../features/repo/Outputs'), 'OutputsPage');
 const PartsPage = lazyRouteComponent(() => import('../features/parts/PartsPage'), 'PartsPage');
-const PullPage = lazyRouteComponent(() => import('../features/pulls/Pull'), 'PullPage');
-const PullsPage = lazyRouteComponent(() => import('../features/pulls/Pulls'), 'PullsPage');
 const RepoLayout = lazyRouteComponent(() => import('../features/repo/RepoLayout'), 'RepoLayout');
 const RepoSettingsPage = lazyRouteComponent(() => import('../features/repo/RepoSettings'), 'RepoSettingsPage');
-const DiscussionRoute = lazyRouteComponent(() => import('../features/issues/IssueDetail'), 'DiscussionRoute');
-const IssueRoute = lazyRouteComponent(() => import('../features/issues/IssueDetail'), 'IssueRoute');
-const DiscussionsRoute = lazyRouteComponent(() => import('../features/issues/IssuesPage'), 'DiscussionsRoute');
-const IssuesRoute = lazyRouteComponent(() => import('../features/issues/IssuesPage'), 'IssuesRoute');
-const MilestonesPage = lazyRouteComponent(() => import('../features/issues/Milestones'), 'MilestonesPage');
 const SearchPage = lazyRouteComponent(() => import('../features/search/Search'), 'SearchPage');
 const RepoSearchPage = lazyRouteComponent(() => import('../features/search/Search'), 'RepoSearchPage');
-const ReleasesPage = lazyRouteComponent(() => import('../features/releases/Releases'), 'ReleasesPage');
-const ReleasePage = lazyRouteComponent(() => import('../features/releases/Releases'), 'ReleasePage');
-const NewReleasePage = lazyRouteComponent(() => import('../features/releases/Releases'), 'NewReleasePage');
-const NewDiscussionRoute = lazyRouteComponent(() => import('../features/issues/NewIssue'), 'NewDiscussionRoute');
-const NewIssueRoute = lazyRouteComponent(() => import('../features/issues/NewIssue'), 'NewIssueRoute');
 const NotificationsPage = lazyRouteComponent(() => import('../features/notifications/Notifications'), 'NotificationsPage');
 const PricingPage = lazyRouteComponent(() => import('../features/pricing/Pricing'), 'PricingPage');
 const SharePage = lazyRouteComponent(() => import('../features/share/SharePage'), 'SharePage');
@@ -75,15 +61,9 @@ const forgotRoute = createRoute({ getParentRoute: () => rootRoute, path: '/forgo
 const resetRoute = createRoute({ getParentRoute: () => rootRoute, path: '/reset/$token', component: ResetPage });
 const signupRoute = createRoute({ getParentRoute: () => rootRoute, path: '/signup', validateSearch: (s: Record<string, unknown>): { ref?: string; redirect?: string } => ({ ref: str(s.ref), redirect: str(s.redirect) }), component: SignupPage });
 const inviteRoute = createRoute({ getParentRoute: () => rootRoute, path: '/invite/$token', component: lazyRouteComponent(() => import('../features/accounts/Invites'), 'InvitePage') });
-const exploreRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/explore',
-  validateSearch: (s: Record<string, unknown>): { q?: string; sort?: 'updated' | 'stars' | 'trending' } => ({ q: str(s.q), sort: s.sort === 'stars' || s.sort === 'trending' ? s.sort : undefined }),
-  component: ExplorePage,
-});
-const searchParams = (s: Record<string, unknown>): { q?: string; type?: 'repos' | 'files' | 'code' | 'parts' | 'nets' | 'issues' } => ({
+const searchParams = (s: Record<string, unknown>): { q?: string; type?: 'repos' | 'files' | 'code' | 'parts' | 'nets' } => ({
   q: str(s.q),
-  type: ['repos', 'files', 'code', 'parts', 'nets', 'issues'].includes(String(s.type)) ? (s.type as 'repos') : undefined,
+  type: ['repos', 'files', 'code', 'parts', 'nets'].includes(String(s.type)) ? (s.type as 'repos') : undefined,
 });
 const searchRoute = createRoute({ getParentRoute: () => rootRoute, path: '/search', validateSearch: searchParams, component: SearchPage });
 const newRepoRoute = createRoute({
@@ -94,14 +74,12 @@ const newRepoRoute = createRoute({
 });
 const orgSettingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/organizations/$org/settings', component: OrgSettingsPage });
 const orgSettingsSectionRoute = createRoute({ getParentRoute: () => rootRoute, path: '/organizations/$org/settings/$section', component: OrgSettingsPage });
-const orgInsightsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/organizations/$org/insights', component: lazyRouteComponent(() => import('../features/accounts/Insights'), 'InsightsPage') });
 const invoiceRoute = createRoute({ getParentRoute: () => rootRoute, path: '/billing/$owner/invoices/$id', component: lazyRouteComponent(() => import('../features/accounts/Invoice'), 'InvoicePage') });
 const newOrgRoute = createRoute({ getParentRoute: () => rootRoute, path: '/organizations/new', component: NewOrgPage });
 const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: SettingsPage });
 const settingsSectionRoute = createRoute({ getParentRoute: () => rootRoute, path: '/settings/$section', component: SettingsPage });
 const docsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/docs', component: DocsPage });
 const docRoute = createRoute({ getParentRoute: () => rootRoute, path: '/docs/$slug', component: DocsPage });
-const starsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/stars', component: StarsPage });
 const adminRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin', component: AdminOverviewPage });
 const adminUsersRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin/users', component: AdminUsersPage });
 const adminInstanceRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin/instance', component: lazyRouteComponent(() => import('../features/admin/Admin'), 'AdminInstancePage') });
@@ -148,23 +126,11 @@ const commitsRoute = createRoute({
 });
 const commitRoute = createRoute({ getParentRoute: () => repoRoute, path: '/commit/$sha', component: CommitPage });
 const branchesRoute = createRoute({ getParentRoute: () => repoRoute, path: '/branches', component: BranchesPage });
-const pullsRoute = createRoute({
-  getParentRoute: () => repoRoute,
-  path: '/pulls',
-  validateSearch: (s: Record<string, unknown>): { state?: 'open' | 'closed' | 'merged' | 'all' } => ({ state: str(s.state) as 'open' | 'closed' | 'merged' | 'all' | undefined }),
-  component: PullsPage,
-});
 const compareRoute = createRoute({
   getParentRoute: () => repoRoute,
   path: '/compare',
   validateSearch: (s: Record<string, unknown>): { base?: string; head?: string } => ({ base: str(s.base), head: str(s.head) }),
   component: ComparePage,
-});
-const pullRoute = createRoute({
-  getParentRoute: () => repoRoute,
-  path: '/pull/$number',
-  validateSearch: (s: Record<string, unknown>): { tab?: 'conversation' | 'commits' | 'checks' | 'files' } => ({ tab: str(s.tab) as 'conversation' | 'commits' | 'checks' | 'files' | undefined }),
-  component: PullPage,
 });
 const checksRoute = createRoute({
   getParentRoute: () => repoRoute,
@@ -183,19 +149,7 @@ const partsRoute = createRoute({ getParentRoute: () => repoRoute, path: '/parts'
 const bomAlertsRoute = createRoute({ getParentRoute: () => repoRoute, path: '/bom-alerts', component: PartsPage });
 const repoSettingsRoute = createRoute({ getParentRoute: () => repoRoute, path: '/settings', component: RepoSettingsPage });
 const repoSettingsSectionRoute = createRoute({ getParentRoute: () => repoRoute, path: '/settings/$section', component: RepoSettingsPage });
-type IssueSearch = { state?: 'open' | 'closed'; q?: string; label?: string; milestone?: string };
-const issueSearch = (s: Record<string, unknown>): IssueSearch => ({ state: s.state === 'closed' ? 'closed' : undefined, q: str(s.q), label: str(s.label), milestone: str(s.milestone) });
-const issuesRoute = createRoute({ getParentRoute: () => repoRoute, path: '/issues', validateSearch: issueSearch, component: IssuesRoute });
-const newIssueRoute = createRoute({ getParentRoute: () => repoRoute, path: '/issues/new', component: NewIssueRoute });
-const issueRoute = createRoute({ getParentRoute: () => repoRoute, path: '/issues/$number', component: IssueRoute });
-const discussionsRoute = createRoute({ getParentRoute: () => repoRoute, path: '/discussions', validateSearch: issueSearch, component: DiscussionsRoute });
-const newDiscussionRoute = createRoute({ getParentRoute: () => repoRoute, path: '/discussions/new', component: NewDiscussionRoute });
-const discussionRoute = createRoute({ getParentRoute: () => repoRoute, path: '/discussions/$number', component: DiscussionRoute });
-const milestonesRoute = createRoute({ getParentRoute: () => repoRoute, path: '/milestones', component: MilestonesPage });
 const repoSearchRoute = createRoute({ getParentRoute: () => repoRoute, path: '/search', validateSearch: searchParams, component: RepoSearchPage });
-const releasesRoute = createRoute({ getParentRoute: () => repoRoute, path: '/releases', component: ReleasesPage });
-const newReleaseRoute = createRoute({ getParentRoute: () => repoRoute, path: '/releases/new', component: NewReleasePage });
-const releaseRoute = createRoute({ getParentRoute: () => repoRoute, path: '/releases/tag/$', component: ReleasePage });
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -209,19 +163,16 @@ const routeTree = rootRoute.addChildren([
   forgotRoute,
   verifyRoute,
   resetRoute,
-  exploreRoute,
   searchRoute,
   newRepoRoute,
   newOrgRoute,
   orgSettingsRoute,
   orgSettingsSectionRoute,
-  orgInsightsRoute,
   invoiceRoute,
   settingsRoute,
   settingsSectionRoute,
   docsRoute,
   docRoute,
-  starsRoute,
   notificationsRoute,
 
   shareRoute,
@@ -240,35 +191,22 @@ const routeTree = rootRoute.addChildren([
     commitsRoute,
     commitRoute,
     branchesRoute,
-    pullsRoute,
     compareRoute,
-    pullRoute,
     checksRoute,
     outputsRoute,
     partsRoute,
     bomAlertsRoute,
     repoSettingsRoute,
     repoSettingsSectionRoute,
-    issuesRoute,
-    newIssueRoute,
-    issueRoute,
-    discussionsRoute,
-    newDiscussionRoute,
-    discussionRoute,
-    milestonesRoute,
     repoSearchRoute,
-    releasesRoute,
-    newReleaseRoute,
-    releaseRoute,
   ]),
 ]);
 
 /** Page chunks in the order people usually reach them; fetched one by one once the first page has settled. */
 const WARM = [
-  HomePage, ExplorePage, PricingPage, LoginPage, SignupPage, DocsPage, SearchPage, RepoLayout, CodePage, BlobPage, OwnerPage,
-  PullsPage, PullPage, IssuesRoute, IssueRoute, ChecksPage, OutputsPage, PartsPage, ReleasesPage, CommitsPage, CommitPage,
-  BranchesPage, ComparePage, SettingsPage, RepoSettingsPage, NewRepoPage, StarsPage, NotificationsPage, DiscussionsRoute,
-  MilestonesPage, NewIssueRoute, NewOrgPage, OrgSettingsPage, TermsPage, AdminOverviewPage,
+  HomePage, PricingPage, LoginPage, SignupPage, DocsPage, SearchPage, RepoLayout, CodePage, BlobPage, OwnerPage,
+  ChecksPage, OutputsPage, PartsPage, CommitsPage, CommitPage, BranchesPage, ComparePage, SettingsPage, RepoSettingsPage,
+  NewRepoPage, NotificationsPage, NewOrgPage, OrgSettingsPage, TermsPage, AdminOverviewPage,
 ];
 
 function warmPages() {

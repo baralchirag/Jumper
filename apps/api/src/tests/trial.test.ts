@@ -28,6 +28,16 @@ describe.skipIf(!dbAvailable)('free storage trial and expiring invite bonuses', 
     expect(pro.json.plan.limits.storageMb).toBe(20_480);
   });
 
+  it('lets only paying users create organizations on the hosted service', async () => {
+    const alice = await h.user('alice');
+    const refused = await alice.post('/api/orgs', { slug: 'acme', name: 'Acme' });
+    expect(refused.status).toBe(402);
+    expect(refused.json.message).toContain('paid plans');
+    await h.ctx.db.execute(sql`update namespaces set plan = 'pro' where slug = 'alice'`);
+    expect((await alice.post('/api/orgs', { slug: 'acme', name: 'Acme' })).status).toBe(200);
+    expect((await h.anon.get('/api/site')).json.plansEnforced).toBe(true);
+  });
+
   it('counts each invite bonus for 15 days from the day the person joined', async () => {
     const alice = await h.user('alice');
     await h.anon.post('/api/auth/register', { username: 'bob', email: 'bob@example.test', password: 'bob-password-123', ref: 'alice' });

@@ -1,14 +1,14 @@
-// Search across repositories, file names, file contents, BOM parts, nets and issues.
+// Search across repositories, file names, file contents, BOM parts and nets.
 //
-// Repositories and issues are searched in PostgreSQL. Files and code come from git at each repository's default branch;
+// Repositories are searched in PostgreSQL. Files and code come from git at each repository's default branch;
 // parts and nets from the BOM and netlist the checks produced for it. Those are bounded: a global search looks at the
 // most recently pushed repositories the viewer can read, a repository search at that one repository.
-import { and, artifacts, desc, eq, issues, namespaces, repositories, sql, type User } from '@jumper/db';
+import { and, artifacts, desc, eq, type User } from '@jumper/db';
 import { parseNetlist } from '@jumper/engineering';
 import type { SearchHit, SearchResults, SearchType } from '@jumper/shared';
 import type { Ctx } from '../../context';
 import { gitFor } from '../repos/access';
-import { repoAccessCondition, visibleRepos } from '../repos/routes';
+import { visibleRepos } from '../repos/routes';
 
 const PER_TYPE = 50;
 const GLOBAL_REPOS = 25;
@@ -63,7 +63,6 @@ async function latestArtifact(ctx: Ctx, t: Target, head: string | null, kind: st
   return { sha: newest[0].sha, rows };
 }
 
-const like = (q: string) => `%${q.replace(/[%_\\]/g, '\\$&')}%`;
 const MPN_FIELDS = ['MPN', 'Manufacturer_Part_Number', 'Manufacturer Part Number', 'MFR Part', 'Mfr. No', 'LCSC', 'LCSC Part #', 'Digikey', 'DigiKey_PN', 'Mouser'];
 
 function mpnOf(fields: Record<string, string> = {}): string | null {
@@ -143,25 +142,6 @@ async function searchNets(ctx: Ctx, t: Target, head: string | null, q: string): 
   return out;
 }
 
-async function searchIssues(ctx: Ctx, viewer: User | null, q: string, repoId?: string): Promise<SearchHit[]> {
-  const access = await repoAccessCondition(ctx, viewer);
-  const rows = await ctx.db
-    .select({ i: issues, repo: repositories.name, owner: namespaces.slug })
-    .from(issues)
-    .innerJoin(repositories, eq(repositories.id, issues.repoId))
-    .innerJoin(namespaces, eq(namespaces.id, repositories.namespaceId))
-    .where(
-      and(
-        ...(repoId ? [eq(issues.repoId, repoId)] : []),
-        ...(access ? [access] : []),
-        sql`(to_tsvector('simple', ${issues.title} || ' ' || ${issues.body}) @@ plainto_tsquery('simple', ${q}) or ${issues.title} ilike ${like(q)})`,
-      ),
-    )
-    .orderBy(desc(issues.updatedAt))
-    .limit(PER_TYPE);
-  return rows.map((r) => ({ type: 'issues' as const, repo: { owner: r.owner, name: r.repo }, number: r.i.number, title: r.i.title, state: r.i.state, kind: r.i.kind, updatedAt: r.i.updatedAt.toISOString() }));
-}
-
 export async function search(ctx: Ctx, viewer: User | null, q: string, type: SearchType, scope?: Target): Promise<SearchResults> {
   const query = q.trim().slice(0, 200);
   const empty: SearchResults = { query, type, hits: [], counts: {}, truncated: false };
@@ -182,12 +162,11 @@ export async function search(ctx: Ctx, viewer: User | null, q: string, type: Sea
     repos: async () =>
       scope
         ? []
-        : (await visibleRepos(ctx, viewer, { q: query, limit: PER_TYPE })).map((r) => ({ type: 'repos' as const, repo: { owner: r.owner, name: r.name }, description: r.description, stars: r.starCount, updatedAt: r.pushedAt ?? r.updatedAt })),
+        : (await visibleRepos(ctx, viewer, { q: query, limit: PER_TYPE })).map((r) => ({ type: 'repos' as const, repo: { owner: r.owner, name: r.name }, description: r.description, updatedAt: r.pushedAt ?? r.updatedAt })),
     files: () => perRepo((t, head) => (head ? searchFiles(ctx, t, head, query) : Promise.resolve([]))),
     code: () => perRepo((t, head) => (head ? searchCode(ctx, t, head, query) : Promise.resolve([]))),
     parts: () => perRepo((t, head) => searchParts(ctx, t, head, query)),
     nets: () => perRepo((t, head) => searchNets(ctx, t, head, query)),
-    issues: () => searchIssues(ctx, viewer, query, scope?.id),
   };
 
   const types = Object.keys(runners) as SearchType[];

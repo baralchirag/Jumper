@@ -14,7 +14,7 @@ interface Item {
   preview?: boolean;
 }
 
-/** Copy-paste snippets for READMEs and docs: live check badges, the latest release, and a picture of the board. */
+/** Copy-paste snippets for READMEs and docs: live check badges and a picture of the board. */
 export function EmbedMenu() {
   const info = useRepoInfo();
   const [open, setOpen] = useState(false);
@@ -26,7 +26,6 @@ export function EmbedMenu() {
     { label: 'All checks', hint: 'Passing, failing or running, for the latest commit on the default branch.', path: `${api}/badge.svg`, alt: 'Checks', link: `${page}/checks` },
     { label: 'DRC', hint: 'Design rule check only.', path: `${api}/badge.svg?check=DRC`, alt: 'DRC', link: `${page}/checks` },
     { label: 'ERC', hint: 'Electrical rule check only.', path: `${api}/badge.svg?check=ERC`, alt: 'ERC', link: `${page}/checks` },
-    { label: 'Latest release', hint: 'Tag of the newest release.', path: `${api}/badge/release.svg`, alt: 'Release', link: `${page}/releases` },
     { label: 'Board preview', hint: 'A 3D render of the board, updated with every push. Add ?view=top, bottom or drawing.', path: `${api}/preview.png`, alt: `${info.name} board`, link: page, preview: true },
   ];
   const iframe = `<iframe src="${origin}/embed/${info.owner}/${info.name}" width="100%" height="480" style="border:1px solid #d0d7de;border-radius:6px" title="${info.name} on Jumper" loading="lazy"></iframe>`;

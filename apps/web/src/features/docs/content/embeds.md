@@ -14,7 +14,6 @@ Show a board's status where people already look: the README on Jumper or GitHub,
 | `…/badge.svg?check=DRC` | One check: `ERC`, `DRC`, `BOM`, `Render` or `Exports` |
 | `…/badge.svg?branch=dev` | Another branch (default: the repository's default branch) |
 | `…/badge.svg?label=rules` | Your own text on the left |
-| `…/badge/release.svg` | The latest release's tag |
 
 ## Board preview
 
@@ -34,4 +33,4 @@ If 3D renders are turned off in [`.jumper.yml`](/docs/jumper-yml), the preview f
 
 Badges and previews of private repositories load only for people signed in to Jumper who can read the repository, for example in the repository's own README. Elsewhere they return *not found*: they never reveal anything about a private repository.
 
-For downloads rather than pictures, see the stable links on [Releases](/docs/releases).
+For downloads rather than pictures, use the commit's **Outputs** page.

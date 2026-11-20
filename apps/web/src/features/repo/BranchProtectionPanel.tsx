@@ -11,7 +11,6 @@ interface Rule {
   pattern: string;
   blockDeletion: boolean;
   blockForcePush: boolean;
-  requirePullRequest: boolean;
   enforceAdmins: boolean;
 }
 
@@ -21,7 +20,7 @@ export function BranchProtectionPanel() {
   const qc = useQueryClient();
   const key = [...keys.repo(info.owner, info.name), 'branch-protection'];
   const q = useQuery({ queryKey: key, queryFn: () => api.get<Rule[]>(repoPath(info.owner, info.name, '/branch-protection')) });
-  const [form, setForm] = useState({ pattern: info.defaultBranch, blockDeletion: true, blockForcePush: true, requirePullRequest: false, enforceAdmins: false });
+  const [form, setForm] = useState({ pattern: info.defaultBranch, blockDeletion: true, blockForcePush: true, enforceAdmins: false });
   const [error, setError] = useState<string | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: key });
   const create = useMutation({
@@ -43,7 +42,6 @@ export function BranchProtectionPanel() {
             <div className="min-w-0 flex-1 space-y-2">
               <div className="font-mono text-sm font-medium">{r.pattern}</div>
               <div className="flex flex-wrap gap-1.5">
-                {r.requirePullRequest && <Label tone="accent">pull request required</Label>}
                 {r.blockForcePush && <Label>no force-push</Label>}
                 {r.blockDeletion && <Label>no deletion</Label>}
                 <Label tone={r.enforceAdmins ? 'attention' : 'default'}>{r.enforceAdmins ? 'applies to admins' : 'admins exempt'}</Label>
@@ -67,7 +65,6 @@ export function BranchProtectionPanel() {
           {(id) => <Input id={id} value={form.pattern} onChange={(e) => setForm({ ...form, pattern: e.target.value })} className="max-w-sm font-mono" required />}
         </FormField>
         <div className="space-y-4">
-          <Checkbox label="Require a pull request" hint="Nobody can push directly. Changes arrive only by merging a pull request." checked={form.requirePullRequest} onChange={(e) => setForm({ ...form, requirePullRequest: e.target.checked })} />
           <Checkbox label="Block force-pushes" hint="History cannot be rewritten, so reviewed work cannot silently disappear." checked={form.blockForcePush} onChange={(e) => setForm({ ...form, blockForcePush: e.target.checked })} />
           <Checkbox label="Block deletion" hint="The branch cannot be deleted from git or the website." checked={form.blockDeletion} onChange={(e) => setForm({ ...form, blockDeletion: e.target.checked })} />
           <Checkbox label="Apply to administrators too" hint="Off: repository admins can bypass the rule in an emergency." checked={form.enforceAdmins} onChange={(e) => setForm({ ...form, enforceAdmins: e.target.checked })} />

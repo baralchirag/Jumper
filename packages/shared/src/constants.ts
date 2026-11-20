@@ -76,8 +76,6 @@ export const REVIEW_STATES = ['approved', 'changes_requested', 'commented'] as c
 export type ReviewState = (typeof REVIEW_STATES)[number];
 
 export const MERGE_METHODS = ['merge', 'squash', 'fast_forward'] as const;
-export type MergeMethod = (typeof MERGE_METHODS)[number];
-
 export const TOKEN_SCOPES = ['repo:read', 'repo:write', 'admin'] as const;
 export type TokenScope = (typeof TOKEN_SCOPES)[number];
 

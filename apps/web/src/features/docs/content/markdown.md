@@ -1,6 +1,6 @@
 # Markdown
 
-READMEs, pull request descriptions and comments use **GitHub-flavoured Markdown**, sanitized before it is shown. This page is itself rendered with it.
+READMEs and comments use **GitHub-flavoured Markdown**, sanitized before it is shown. This page is itself rendered with it.
 
 ## Text
 
@@ -74,7 +74,6 @@ checks:
 ## References
 
 - `@username` links to a profile, like @design-qa
-- `#12` links to pull request 12 in the same repository
 - Relative links and images in a README resolve inside the repository: `![top](docs/top.png)`
 
 ## Collapsible sections

@@ -72,13 +72,11 @@ describe.skipIf(!dbAvailable)('security regression suite', () => {
     await h.repo(alice, 'board');
     const tok = await alice.post('/api/user/tokens', { name: 'ro', scopes: ['repo:read'], expiresInDays: 30 });
     const auth = { authorization: `Bearer ${tok.json.token}` };
-    expect((await h.app.inject({ method: 'GET', url: '/api/repos/alice/board/issues', headers: auth })).statusCode).toBe(200);
-    const write = await h.app.inject({ method: 'POST', url: '/api/repos/alice/board/issues', headers: auth, payload: { title: 'x' } });
+    expect((await h.app.inject({ method: 'GET', url: '/api/repos/alice/board', headers: auth })).statusCode).toBe(200);
+    const write = await h.app.inject({ method: 'POST', url: '/api/repos', headers: auth, payload: { name: 'from-ro-token' } });
     expect(write.statusCode).toBe(403);
-    const comment = await h.app.inject({ method: 'POST', url: '/api/repos/alice/board/issues/1/comments', headers: auth, payload: { body: 'x' } });
-    expect(comment.statusCode).toBe(403);
     const rw = await alice.post('/api/user/tokens', { name: 'rw', scopes: ['repo:write'], expiresInDays: 30 });
-    const ok = await h.app.inject({ method: 'POST', url: '/api/repos/alice/board/issues', headers: { authorization: `Bearer ${rw.json.token}` }, payload: { title: 'x' } });
+    const ok = await h.app.inject({ method: 'POST', url: '/api/repos', headers: { authorization: `Bearer ${rw.json.token}` }, payload: { name: 'from-rw-token' } });
     expect(ok.statusCode).toBe(200);
     const del = await h.app.inject({ method: 'DELETE', url: '/api/repos/alice/board', headers: auth });
     expect(del.statusCode).toBe(403);
@@ -112,7 +110,7 @@ describe.skipIf(!dbAvailable)('security regression suite', () => {
   });
 
   it('error responses do not leak internals', async () => {
-    const res = await h.anon.get('/api/repos/alice/board/pulls/not-a-number');
+    const res = await h.anon.get(`/api/namespaces/${'x'.repeat(500)}`);
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(res.body).not.toMatch(/node_modules|at Object\.|\.ts:\d+/);
   });

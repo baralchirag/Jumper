@@ -38,7 +38,10 @@ export function branchMatches(pattern: string, name: string): boolean {
 
 /**
  * A repository's own rules, plus the ones that come from above: the owner's protected release branches (no deletion,
- * no force-push, no direct push, for admins too) and, under legal hold, no deleting or rewriting any branch.
+ * no force-push, for admins too) and, under legal hold, no deleting or rewriting any branch.
+ *
+ * The `require_pull_request` column is ignored: Jumper no longer has pull requests (they live on GitHub), and honouring
+ * old rows would lock people out of their own branches.
  */
 export const ownRulesFor = (ctx: Ctx, repoId: string): Promise<BranchProtection[]> => ctx.db.select().from(branchProtection).where(eq(branchProtection.repoId, repoId));
 
@@ -46,20 +49,20 @@ export async function rulesFor(ctx: Ctx, repoId: string): Promise<BranchProtecti
   const own = await ownRulesFor(ctx, repoId);
   const row = (await ctx.db.select({ repo: repositories, ns: namespaces }).from(repositories).innerJoin(namespaces, eq(namespaces.id, repositories.namespaceId)).where(eq(repositories.id, repoId)).limit(1))[0];
   if (!row) return own;
-  const synthetic = (pattern: string, requirePullRequest: boolean, source: string): BranchProtection => ({
+  const synthetic = (pattern: string, source: string): BranchProtection => ({
     id: `${source}:${pattern}`,
     repoId,
     pattern,
     blockDeletion: true,
     blockForcePush: true,
-    requirePullRequest,
+    requirePullRequest: false,
     enforceAdmins: true,
     createdBy: null,
     createdAt: new Date(0),
   } as BranchProtection);
   const policy = await effectivePolicy(ctx, row.ns);
-  const extra = policy.releaseBranches.map((p) => synthetic(p, true, 'policy'));
-  if (await holdOnRepo(ctx, row.repo)) extra.push(synthetic('*', false, 'hold'));
+  const extra = policy.releaseBranches.map((p) => synthetic(p, 'policy'));
+  if (await holdOnRepo(ctx, row.repo)) extra.push(synthetic('*', 'hold'));
   return [...own, ...extra];
 }
 
@@ -69,7 +72,6 @@ export const isInherited = (r: BranchProtection) => r.id.startsWith('policy:') |
 export interface Effective {
   blockDeletion: boolean;
   blockForcePush: boolean;
-  requirePullRequest: boolean;
 }
 
 /** The union of every rule matching `branch`. Admins are exempt from rules that do not enforce admins. */
@@ -79,7 +81,6 @@ export function effectiveFor(rules: BranchProtection[], branch: string, isAdmin:
   return {
     blockDeletion: hit.some((r) => r.blockDeletion),
     blockForcePush: hit.some((r) => r.blockForcePush),
-    requirePullRequest: hit.some((r) => r.requirePullRequest),
   };
 }
 
@@ -87,11 +88,11 @@ export async function isProtectedFromDeletion(ctx: Ctx, repoId: string, branch: 
   return effectiveFor(await rulesFor(ctx, repoId), branch, isAdmin)?.blockDeletion ?? false;
 }
 
-/** Serialise the rules that apply to one pusher for the hook: `glob<TAB>flags`, flags ⊂ {D, F, P}. */
+/** Serialise the rules that apply to one pusher for the hook: `glob<TAB>flags`, flags ⊂ {D, F}. */
 export function hookRules(rules: BranchProtection[], isAdmin: boolean): string {
   return rules
     .filter((r) => !isAdmin || r.enforceAdmins)
-    .map((r) => `${r.pattern}\t${r.blockDeletion ? 'D' : ''}${r.blockForcePush ? 'F' : ''}${r.requirePullRequest ? 'P' : ''}`)
+    .map((r) => `${r.pattern}\t${r.blockDeletion ? 'D' : ''}${r.blockForcePush ? 'F' : ''}`)
     .join('\n');
 }
 
@@ -114,9 +115,6 @@ while read -r old new ref; do
     [ -n "$pat" ] || continue
     case "$branch" in
       $pat)
-        case "$flags" in
-          *P*) echo "error: '$branch' is protected: open a pull request instead of pushing directly." >&2; fail=1; continue ;;
-        esac
         case "$flags" in
           *D*) if [ "$new" = "$zero" ]; then echo "error: '$branch' is protected and cannot be deleted." >&2; fail=1; continue; fi ;;
         esac

@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRight, Plus } from 'lucide-react';
-import type { FollowList, RepoInfo } from '@jumper/shared';
-import { Avatar, PageSpinner, RelativeTime, buttonClass, cx } from '@jumper/ui';
+import type { RepoInfo } from '@jumper/shared';
+import { Avatar, PageSpinner, buttonClass, cx } from '@jumper/ui';
 import { BoardDiff, BOARD, CHANGES, isShown, kindLabel, type Change } from './diff/BoardDiff';
 import reviewLight from './shots/review-light.webp';
 import reviewDark from './shots/review-dark.webp';
@@ -11,7 +11,7 @@ import checksLight from './shots/checks-light.webp';
 import checksDark from './shots/checks-dark.webp';
 import fabLight from './shots/fab-light.webp';
 import fabDark from './shots/fab-dark.webp';
-import { RepoList, RepoThumb } from '../../shared/components/RepoList';
+import { RepoList } from '../../shared/components/RepoList';
 import { PageContainer } from '../../shared/components/common';
 import { api } from '../../shared/lib/api';
 import { useMe, wasSignedIn } from '../../shared/lib/queries';
@@ -111,8 +111,8 @@ function Landing() {
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
               <PrimaryCta />
-              <Link to="/explore" search={{ q: '' }} className="lp-link text-[15px]">
-                Explore projects
+              <Link to="/docs/$slug" params={{ slug: 'quick-start' }} className="lp-link text-[15px]">
+                How it works with GitHub
               </Link>
             </div>
           </div>
@@ -319,7 +319,7 @@ type Context = { kind: 'user' | 'org'; slug: string; name: string; role?: 'owner
 
 const CONTEXT_KEY = 'jumper-workbench-context';
 
-/** Signed-in home: your repositories (or an organization's), how to get the first board online, and what is new. */
+/** Signed-in home: your repositories (or an organization's) and how to get the first board online. */
 export function HomePage() {
   const { data: me, isLoading } = useMe();
   const [ctxSlug, setCtxSlug] = useState<string | null>(() => {
@@ -330,12 +330,6 @@ export function HomePage() {
     }
   });
   const mine = useQuery({ queryKey: ['repos', 'mine'], queryFn: () => api.get<RepoInfo[]>('/repos', { mine: true }), enabled: Boolean(me) });
-  const recent = useQuery({ queryKey: ['repos', 'explore', ''], queryFn: () => api.get<RepoInfo[]>('/repos'), enabled: Boolean(me) });
-  const following = useQuery({
-    queryKey: ['people', me?.username.toLowerCase() ?? '', 'following'],
-    queryFn: () => api.get<FollowList>(`/users/${encodeURIComponent(me!.username)}/following`),
-    enabled: Boolean(me),
-  });
   const [filter, setFilter] = useState('');
 
   // Visitors who were not signed in last time get the landing at once instead of waiting on /auth/me.
@@ -355,7 +349,6 @@ export function HomePage() {
   const repos = (mine.data ?? []).filter((r) => r.owner.toLowerCase() === context.slug.toLowerCase());
   const shown = filter ? repos.filter((r) => `${r.name} ${r.description ?? ''}`.toLowerCase().includes(filter.toLowerCase())) : repos;
   const empty = mine.isSuccess && repos.length === 0;
-  const others = (recent.data ?? []).filter((r) => r.owner.toLowerCase() !== context.slug.toLowerCase()).slice(0, 6);
 
   return (
     <PageContainer className="max-w-[1280px] py-10 md:py-12">
@@ -379,7 +372,7 @@ export function HomePage() {
               ))}
             </div>
           ) : (
-            <p className="mt-2 text-[15px] text-fg-muted">Your boards, and what is new on Jumper.</p>
+            <p className="mt-2 text-[15px] text-fg-muted">Your boards, checked on every commit.</p>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -427,67 +420,22 @@ export function HomePage() {
           )}
         </section>
 
-        <aside className="flex flex-col gap-10">
-          <section aria-labelledby="follow-h">
-            <h2 id="follow-h" className="mb-3 border-b border-border pb-3 text-[15px] font-medium">
-              People you follow
-            </h2>
-            {following.data?.users.length ? (
-              <ul className="flex flex-col gap-1">
-                {following.data.users.slice(0, 8).map((u) => (
-                  <li key={u.id}>
-                    <Link to="/$owner" params={{ owner: u.username }} className="-mx-2 flex items-center gap-2.5 rounded-sm px-2 py-1.5 text-sm no-underline hover:bg-canvas-subtle">
-                      <Avatar name={u.username} src={u.avatarUrl} size={22} />
-                      <span className="min-w-0 truncate font-medium text-fg">{u.name || u.username}</span>
-                      {u.name && <span className="min-w-0 truncate text-fg-subtle">{u.username}</span>}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-[13px] leading-relaxed text-fg-muted">
-                Follow designers from their profile to keep them here.{' '}
-                <Link to="/explore" search={{ q: '' }} className="link">
-                  Find some on Explore
-                </Link>
-                .
-              </p>
-            )}
+        <aside className="flex flex-col gap-6">
+          <section aria-labelledby="gh-h" className="rounded-md border border-border p-5">
+            <h2 id="gh-h" className="text-[15px] font-medium">Keep working on GitHub</h2>
+            <p className="mt-2 text-[13px] leading-relaxed text-fg-muted">
+              Connect a GitHub repository and Jumper follows it: every new commit gets ERC, DRC, a BOM with live prices, a visual diff and a fab package.
+            </p>
+            <Link to="/new" search={{ owner: context.slug }} className={buttonClass('default', 'sm', 'mt-4')}>
+              Connect a repository
+            </Link>
           </section>
-
-          <section aria-labelledby="recent-h">
-            <div className="mb-3 flex items-baseline justify-between border-b border-border pb-3">
-              <h2 id="recent-h" className="text-[15px] font-medium">
-                New on Jumper
-              </h2>
-              <Link to="/explore" search={{ q: '' }} className="text-[13px] text-fg-muted no-underline hover:text-fg">
-                Explore
-              </Link>
-            </div>
-            {recent.isLoading ? (
-              <PageSpinner />
-            ) : others.length ? (
-              <ul className="flex flex-col gap-3">
-                {others.map((r) => (
-                  <li key={r.id}>
-                    <Link to="/$owner/$repo" params={{ owner: r.owner, repo: r.name }} className="group flex items-center gap-3 no-underline">
-                      <RepoThumb repo={r} className="aspect-[16/10] w-16 shrink-0" />
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm text-fg group-hover:underline group-hover:decoration-fg/40 group-hover:underline-offset-4">
-                          <span className="text-fg-muted">{r.owner} / </span>
-                          <span className="font-medium">{r.name}</span>
-                        </span>
-                        <span className="block text-xs text-fg-subtle">
-                          Updated <RelativeTime date={r.pushedAt ?? r.updatedAt} />
-                        </span>
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-[13px] text-fg-muted">Nothing new yet.</p>
-            )}
+          <section aria-labelledby="plugin-h" className="rounded-md border border-border p-5">
+            <h2 id="plugin-h" className="text-[15px] font-medium">Push from KiCad</h2>
+            <p className="mt-2 text-[13px] leading-relaxed text-fg-muted">The Jumper plugin commits and pushes from inside KiCad, and opens the diff in your browser.</p>
+            <Link to="/docs/$slug" params={{ slug: 'kicad-plugin' }} className="link mt-3 inline-block text-[13px]">
+              Get the plugin
+            </Link>
           </section>
         </aside>
       </div>

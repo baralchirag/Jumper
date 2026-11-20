@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { CircuitBoard, GitFork, GitPullRequest, Lock, Star } from 'lucide-react';
+import { CircuitBoard, Lock } from 'lucide-react';
 import type { RepoInfo } from '@jumper/shared';
 import { Avatar, Label, RelativeTime, cx } from '@jumper/ui';
 
@@ -39,21 +39,9 @@ function RepoRow({ r, showOwner }: { r: RepoInfo; showOwner: boolean }) {
               <Lock size={9} /> Private
             </Label>
           )}
-          {r.forkOf && <GitFork size={13} aria-label={`Fork of ${r.forkOf.owner}/${r.forkOf.name}`} className="shrink-0 text-fg-subtle" />}
         </div>
         {r.description && <p className="line-clamp-2 max-w-2xl text-[14px] leading-[1.45] text-fg-muted">{r.description}</p>}
         <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-fg-subtle">
-          <span className={cx('flex items-center gap-1.5', r.starCount > 0 && 'text-fg-muted')}>
-            <Star size={13} className={r.starred ? 'fill-current text-attention' : ''} aria-hidden />
-            <span className="tabular-nums">{r.starCount}</span>
-            <span className="sr-only">stars</span>
-          </span>
-          {r.openPullCount > 0 && (
-            <span className="flex items-center gap-1.5 text-fg-muted">
-              <GitPullRequest size={13} aria-hidden /> <span className="tabular-nums">{r.openPullCount}</span>
-              <span className="sr-only">open pull requests</span>
-            </span>
-          )}
           <span>
             Updated <RelativeTime date={r.pushedAt ?? r.updatedAt} />
           </span>

@@ -8,17 +8,15 @@ import {
   namespaces,
   orgMembers,
   organizations,
-  pullRequests,
   customRoles,
   repoCollaborators,
   repositories,
   sql,
-  stars,
   users,
   type Repository,
   type User,
 } from '@jumper/db';
-import { KICAD_GITIGNORE, collaboratorSchema, isPlanId, createRepoSchema, pinsSchema, updateRepoSchema, type ExploreInfo, type NamespaceInfo, type RepoInfo } from '@jumper/shared';
+import { KICAD_GITIGNORE, collaboratorSchema, isPlanId, createRepoSchema, pinsSchema, updateRepoSchema, type NamespaceInfo, type RepoInfo } from '@jumper/shared';
 import { requireScope, requireUser } from '../auth/plugin';
 import { GitRepo } from '../git/repo';
 import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
@@ -31,11 +29,10 @@ import { requireFeature } from '../license/license';
 import { assertRepoNotHeld, holdOnRepo } from '../legal/holds';
 import { findTemplate, templateInfos } from './templates';
 import { resolveRoleRef } from '../roles/service';
-import { signatureFor } from '../pulls/merge';
+import { signatureFor } from '../git/signature';
 import { enqueueAnalysis } from './push';
 import { assertCollaboratorSeat } from '../usage/service';
 import { toRepoInfo, toUserSummary } from './serialize';
-import { followStats } from '../follows/routes';
 import type { Ctx } from '../../context';
 
 /** Write a path → content map as a git tree (folders included) and return its id. */
@@ -61,7 +58,7 @@ async function writeTree(git: GitRepo, files: Record<string, string>): Promise<s
 }
 
 const SAMPLE_CONFIG = `# Jumper project configuration
-# See docs/jumper-yml.md for every option.
+# Every option: https://<your Jumper>/docs/jumper-yml
 checks:
   erc: { enabled: true, fail_on: error }
   drc: { enabled: true, fail_on: error, schematic_parity: true }
@@ -70,7 +67,6 @@ outputs:
   svg: true
   glb: true
   gerbers: true
-required_checks: [ERC, DRC]
 `;
 
 /** `kind`: `readme` for an empty project, `sample` for the example board, or the id of a starter template. */
@@ -130,30 +126,15 @@ export async function repoAccessCondition(ctx: Ctx, viewer: User | null) {
     ))`;
 }
 
-/**
- * Activity over the last 14 days, for "trending": new stars count most, then forks, merged pull requests and
- * published releases, plus a little for any push. Cheap enough to compute per query at this scale.
- */
-const TRENDING = sql<number>`(
-  3 * (select count(*) from ${stars} s where s.repo_id = ${repositories.id} and s.created_at > now() - interval '14 days')
-  + 4 * (select count(*) from ${repositories} f where f.fork_of_id = ${repositories.id} and f.created_at > now() - interval '14 days')
-  + 2 * (select count(*) from ${pullRequests} p where p.repo_id = ${repositories.id} and p.merged_at > now() - interval '14 days')
-  + 3 * (select count(*) from releases r where r.repo_id = ${repositories.id} and r.published_at > now() - interval '14 days')
-  + (case when ${repositories.pushedAt} > now() - interval '14 days' then 1 else 0 end)
-)`;
-
 /** Repos visible to `viewer`, optionally restricted to one namespace. */
 export async function visibleRepos(
   ctx: Ctx,
   viewer: User | null,
-  opts: { namespaceId?: string; q?: string; limit?: number; starredBy?: string; sort?: 'updated' | 'stars' | 'trending'; featured?: boolean; ids?: string[]; publicOnly?: boolean } = {},
+  opts: { namespaceId?: string; q?: string; limit?: number; ids?: string[]; publicOnly?: boolean } = {},
 ): Promise<RepoInfo[]> {
   const conds = [];
-  if (opts.featured) conds.push(sql`${repositories.featuredAt} is not null`);
   if (opts.ids) conds.push(opts.ids.length ? inArray(repositories.id, opts.ids) : sql`false`);
   if (opts.publicOnly) conds.push(sql`${repositories.visibility} = 'public'`);
-  if (opts.sort === 'trending') conds.push(sql`${TRENDING} > 0`);
-  if (opts.starredBy) conds.push(sql`exists (select 1 from ${stars} s where s.repo_id = ${repositories.id} and s.user_id = ${opts.starredBy})`);
   if (opts.namespaceId) conds.push(eq(repositories.namespaceId, opts.namespaceId));
   if (opts.q) {
     conds.push(
@@ -166,22 +147,14 @@ export async function visibleRepos(
     .select({
       repo: repositories,
       ns: namespaces,
-      openPulls: sql<number>`(select count(*)::int from ${pullRequests} p where p.repo_id = ${repositories.id} and p.state = 'open')`,
-      starCount: sql<number>`(select count(*)::int from ${stars} s where s.repo_id = ${repositories.id})`,
-      starred: viewer ? sql<boolean>`exists (select 1 from ${stars} s where s.repo_id = ${repositories.id} and s.user_id = ${viewer.id})` : sql<boolean>`false`,
     })
     .from(repositories)
     .innerJoin(namespaces, eq(namespaces.id, repositories.namespaceId))
     .where(conds.length ? and(...conds) : undefined)
-    .orderBy(
-      ...(opts.featured ? [desc(repositories.featuredAt)] : []),
-      ...(opts.sort === 'trending' ? [desc(TRENDING)] : []),
-      ...(opts.sort === 'stars' ? [desc(sql`(select count(*) from ${stars} s where s.repo_id = ${repositories.id})`)] : []),
-      desc(sql`coalesce(${repositories.pushedAt}, ${repositories.createdAt})`),
-    )
+    .orderBy(desc(sql`coalesce(${repositories.pushedAt}, ${repositories.createdAt})`))
     .limit(opts.limit ?? 100);
   const access = await accessesFor(ctx, viewer, rows);
-  return rows.flatMap((r, i) => (access[i]!.permission === 'none' ? [] : [toRepoInfo(ctx, r.repo, r.ns, access[i]!.permission, { openPullCount: r.openPulls, starCount: r.starCount, starred: r.starred, access: access[i]! })]));
+  return rows.flatMap((r, i) => (access[i]!.permission === 'none' ? [] : [toRepoInfo(ctx, r.repo, r.ns, access[i]!.permission, { access: access[i]! })]));
 }
 
 const params = z.object({ owner: z.string().max(100), repo: z.string().max(100) });
@@ -197,17 +170,10 @@ const repoRoutes: FastifyPluginAsyncZod = async (app) => {
     const repos = await visibleRepos(ctx, req.user, { namespaceId: ns.id });
     const byId = new Map(repos.map((r) => [r.id, r]));
     const pinned = ns.pinnedRepoIds.map((id) => byId.get(id)).filter((r): r is RepoInfo => Boolean(r));
-    // Portfolio figures count public work only, so they read the same for every visitor.
-    const pub = repos.filter((r) => r.visibility === 'public');
-    const pubIds = pub.map((r) => r.id);
-    const [{ releases: releaseCount }] = (pubIds.length
-      ? await ctx.db.execute(sql`select count(*)::int as releases from releases where draft = false and repo_id in (${sql.join(pubIds.map((i) => sql`${i}`), sql`, `)})`)
-      : [{ releases: 0 }]) as unknown as [{ releases: number }];
-    const stats = { repos: pub.length, releases: releaseCount, starsReceived: pub.reduce((a, r) => a + r.starCount, 0), forksReceived: pub.reduce((a, r) => a + r.forkCount, 0) };
+    // Counts public work only, so it reads the same for every visitor.
+    const stats = { repos: repos.filter((r) => r.visibility === 'public').length };
     if (ns.kind === 'user') {
       const u = (await ctx.db.select().from(users).where(eq(users.id, ns.userId!)).limit(1))[0]!;
-      const [{ n }] = (await ctx.db.select({ n: sql<number>`count(*)::int` }).from(stars).where(eq(stars.userId, u.id))) as [{ n: number }];
-      const people = await followStats(ctx, u.id, req.user?.id);
       return {
         slug: ns.slug,
         kind: 'user',
@@ -218,14 +184,10 @@ const repoRoutes: FastifyPluginAsyncZod = async (app) => {
         location: u.location,
         company: u.company,
         pronouns: u.pronouns,
-        starCount: n,
         createdAt: u.createdAt.toISOString(),
         repos,
         pinned,
         stats,
-        followers: people.followers,
-        following: people.following,
-        viewerFollows: people.viewerFollows,
         plan: isPlanId(ns.plan) ? ns.plan : 'free',
       };
     }
@@ -264,27 +226,6 @@ const repoRoutes: FastifyPluginAsyncZod = async (app) => {
     return { ok: true };
   });
 
-  // Explore: what administrators picked, what is busy right now, and what changed last. Public work only.
-  app.get('/explore', async (): Promise<ExploreInfo> => {
-    const [featured, trending, recent] = await Promise.all([
-      visibleRepos(ctx, null, { featured: true, publicOnly: true, limit: 6 }),
-      visibleRepos(ctx, null, { sort: 'trending', publicOnly: true, limit: 10 }),
-      visibleRepos(ctx, null, { publicOnly: true, limit: 12 }),
-    ]);
-    return { featured, trending, recent: recent.filter((r) => !r.isEmpty) };
-  });
-
-  app.put('/admin/repos/:owner/:repo/featured', { schema: { params, body: z.object({ featured: z.boolean() }) } }, async (req) => {
-    const user = requireUser(req);
-    if (!user.isAdmin) throw forbidden('Only administrators can feature repositories');
-    const found = await findRepo(ctx, req.params.owner, req.params.repo);
-    if (!found) throw notFound('Repository not found');
-    if (req.body.featured && found.repo.visibility !== 'public') throw badRequest('Only public repositories can be featured');
-    await ctx.db.update(repositories).set({ featuredAt: req.body.featured ? new Date() : null }).where(eq(repositories.id, found.repo.id));
-    await audit(req, req.body.featured ? 'admin.repo.feature' : 'admin.repo.unfeature', { type: 'repo', id: found.repo.id });
-    return { featured: req.body.featured };
-  });
-
   app.get(
     '/repos',
     {
@@ -292,22 +233,16 @@ const repoRoutes: FastifyPluginAsyncZod = async (app) => {
         querystring: z.object({
           q: z.string().max(200).optional(),
           mine: z.stringbool().optional(),
-          starred: z.stringbool().optional(),
-          sort: z.enum(['updated', 'stars', 'trending']).optional(),
         }),
       },
     },
     async (req) => {
-    if (req.query.starred) {
-      const user = requireUser(req);
-      return visibleRepos(ctx, user, { starredBy: user.id, limit: 200 });
-    }
     if (req.query.mine) {
       const user = requireUser(req);
       const all = await visibleRepos(ctx, user, { limit: 200 });
       return all.filter((r) => r.permission !== 'read' || r.owner.toLowerCase() === user.username.toLowerCase());
     }
-    return visibleRepos(ctx, req.user, { q: req.query.q, sort: req.query.sort, limit: 50 });
+    return visibleRepos(ctx, req.user, { q: req.query.q, limit: 50 });
     },
   );
 
@@ -364,46 +299,7 @@ const repoRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.get('/repos/:owner/:repo', { schema: { params } }, async (req) => {
     const r = await loadRepo(req, req.params.owner, req.params.repo);
-    const [{ n }] = (await ctx.db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(pullRequests)
-      .where(and(eq(pullRequests.repoId, r.repo.id), eq(pullRequests.state, 'open')))) as [{ n: number }];
-    const [st] = (await ctx.db
-      .select({
-        n: sql<number>`count(*)::int`,
-        mine: req.user ? sql<boolean>`coalesce(bool_or(${stars.userId} = ${req.user.id}), false)` : sql<boolean>`false`,
-      })
-      .from(stars)
-      .where(eq(stars.repoId, r.repo.id))) as [{ n: number; mine: boolean }];
-    const [parent] = r.repo.forkOfId
-      ? await ctx.db.select({ name: repositories.name, owner: namespaces.slug }).from(repositories).innerJoin(namespaces, eq(namespaces.id, repositories.namespaceId)).where(eq(repositories.id, r.repo.forkOfId)).limit(1)
-      : [];
-    const [{ forks }] = (await ctx.db.select({ forks: sql<number>`count(*)::int` }).from(repositories).where(eq(repositories.forkOfId, r.repo.id))) as [{ forks: number }];
-    return toRepoInfo(ctx, r.repo, r.ns, r.permission, { isEmpty: await r.git.isEmpty(), openPullCount: n, starCount: st.n, starred: st.mine, forkOf: parent ?? null, forkCount: forks, access: r, legalHold: Boolean(await holdOnRepo(ctx, r.repo)) });
-  });
-
-  // ---------- stars ----------
-
-  const setStar = async (owner: string, name: string, req: Parameters<typeof requireUser>[0], on: boolean) => {
-    const user = requireUser(req);
-    const r = await loadRepo(req, owner, name);
-    if (on) await ctx.db.insert(stars).values({ userId: user.id, repoId: r.repo.id }).onConflictDoNothing();
-    else await ctx.db.delete(stars).where(and(eq(stars.userId, user.id), eq(stars.repoId, r.repo.id)));
-    const [{ n }] = (await ctx.db.select({ n: sql<number>`count(*)::int` }).from(stars).where(eq(stars.repoId, r.repo.id))) as [{ n: number }];
-    return { starred: on, starCount: n };
-  };
-  app.put('/repos/:owner/:repo/star', { schema: { params } }, async (req) => setStar(req.params.owner, req.params.repo, req, true));
-  app.delete('/repos/:owner/:repo/star', { schema: { params } }, async (req) => setStar(req.params.owner, req.params.repo, req, false));
-  app.get('/repos/:owner/:repo/stargazers', { schema: { params } }, async (req) => {
-    const r = await loadRepo(req, req.params.owner, req.params.repo);
-    const rows = await ctx.db
-      .select({ user: users, at: stars.createdAt })
-      .from(stars)
-      .innerJoin(users, eq(users.id, stars.userId))
-      .where(eq(stars.repoId, r.repo.id))
-      .orderBy(desc(stars.createdAt))
-      .limit(200);
-    return rows.map((x) => ({ ...toUserSummary(x.user), starredAt: x.at.toISOString() }));
+    return toRepoInfo(ctx, r.repo, r.ns, r.permission, { isEmpty: await r.git.isEmpty(), access: r, legalHold: Boolean(await holdOnRepo(ctx, r.repo)) });
   });
 
   app.patch('/repos/:owner/:repo', { schema: { params, body: updateRepoSchema } }, async (req) => {

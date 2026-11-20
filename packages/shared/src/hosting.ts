@@ -1,6 +1,5 @@
-// Types shared by the API and web app for repository hosting features: mirroring, SSH keys, releases, search, LFS.
+// Types shared by the API and web app for repository hosting features: mirroring, SSH keys, search, LFS.
 import { z } from 'zod';
-import type { UserSummary } from './schemas';
 
 // ---------- mirroring ----------
 
@@ -58,82 +57,9 @@ export interface SshKeyInfo {
   createdAt: string;
 }
 
-// ---------- releases ----------
-
-/** Kinds of file a release can carry. Generated kinds are built from the tagged revision's check outputs. */
-export const RELEASE_ASSET_KINDS = ['gerbers', 'drill', 'bom', 'step', 'pdf', 'positions', 'jlcpcb', 'pcbway', 'oshpark', 'upload'] as const;
-export type ReleaseAssetKind = (typeof RELEASE_ASSET_KINDS)[number];
-export const GENERATED_ASSET_KINDS = ['gerbers', 'bom', 'step', 'pdf', 'positions', 'jlcpcb', 'pcbway', 'oshpark'] as const satisfies readonly ReleaseAssetKind[];
-
-export const createReleaseSchema = z.object({
-  tag: z
-    .string()
-    .trim()
-    .min(1)
-    .max(100)
-    .regex(/^(?![./-])(?!.*\.\.)(?!.*\/\/)(?!.*@\{)[A-Za-z0-9._/+-]+(?<![./])$/, 'Use letters, numbers, dots, dashes and slashes, e.g. v1.2 or rev-B'),
-  /** Branch or commit to tag when the tag does not exist yet. Defaults to the default branch. */
-  target: z.string().max(200).optional(),
-  name: z.string().trim().max(200).default(''),
-  body: z.string().max(100_000).default(''),
-  draft: z.boolean().default(false),
-  prerelease: z.boolean().default(false),
-  /** Fabrication files to build from the revision's outputs and attach. */
-  assets: z.array(z.enum(GENERATED_ASSET_KINDS)).max(GENERATED_ASSET_KINDS.length).default(['gerbers', 'bom', 'step', 'pdf', 'positions', 'jlcpcb']),
-});
-
-export const updateReleaseSchema = z.object({
-  name: z.string().trim().max(200).optional(),
-  body: z.string().max(100_000).optional(),
-  draft: z.boolean().optional(),
-  prerelease: z.boolean().optional(),
-});
-
-export interface ReleaseAssetInfo {
-  id: string;
-  name: string;
-  kind: ReleaseAssetKind;
-  size: number;
-  contentType: string;
-  downloadCount: number;
-  /** API path that serves the file. */
-  url: string;
-}
-
-export interface ReleaseInfo {
-  id: string;
-  tag: string;
-  name: string;
-  body: string;
-  sha: string;
-  draft: boolean;
-  prerelease: boolean;
-  latest: boolean;
-  author: UserSummary | null;
-  createdAt: string;
-  publishedAt: string | null;
-  assets: ReleaseAssetInfo[];
-  /** Generated kinds that could not be built (e.g. no PCB in the project, or checks not finished). */
-  missing: { kind: ReleaseAssetKind; reason: string }[];
-  /** Sign-off state when the owner requires named people to approve releases; null when no approval is required. */
-  approval: ReleaseApprovalState | null;
-  /** Digest of the signed release record, once the release is published on an instance that keeps records. */
-  recordDigest: string | null;
-}
-
-export interface ReleaseApprovalState {
-  required: number;
-  /** People whose approval counts. */
-  approvers: UserSummary[];
-  decisions: { user: UserSummary; decision: 'approved' | 'rejected'; comment: string; sha: string; at: string }[];
-  approved: boolean;
-  /** Whether the current user may sign off. */
-  canSign: boolean;
-}
-
 // ---------- search ----------
 
-export const SEARCH_TYPES = ['repos', 'files', 'code', 'parts', 'nets', 'issues'] as const;
+export const SEARCH_TYPES = ['repos', 'files', 'code', 'parts', 'nets'] as const;
 export type SearchType = (typeof SEARCH_TYPES)[number];
 
 export interface SearchRepoRef {
@@ -142,12 +68,11 @@ export interface SearchRepoRef {
 }
 
 export type SearchHit =
-  | { type: 'repos'; repo: SearchRepoRef; description: string; stars: number; updatedAt: string }
+  | { type: 'repos'; repo: SearchRepoRef; description: string; updatedAt: string }
   | { type: 'files'; repo: SearchRepoRef; ref: string; path: string }
   | { type: 'code'; repo: SearchRepoRef; ref: string; path: string; line: number; text: string }
   | { type: 'parts'; repo: SearchRepoRef; ref: string; refs: string[]; value: string; footprint: string; mpn: string | null; quantity: number }
-  | { type: 'nets'; repo: SearchRepoRef; ref: string; net: string; pads: number }
-  | { type: 'issues'; repo: SearchRepoRef; number: number; title: string; state: 'open' | 'closed'; kind: 'issue' | 'discussion'; updatedAt: string };
+  | { type: 'nets'; repo: SearchRepoRef; ref: string; net: string; pads: number };
 
 export interface SearchResults {
   query: string;

@@ -103,10 +103,8 @@ function Overview({ o }: { o: AdminOverview }) {
           <Stat label="Users" value={o.counts.users} to="users" />
           <Stat label="Organizations" value={o.counts.orgs} to="organizations" />
           <Stat label="Repositories" value={o.counts.repos} to="repositories" />
-          <Stat label="Pull requests" value={o.counts.pulls} to="pull_requests" />
           <Stat label="Check runs" value={o.counts.checks} to="check_runs" />
           <Stat label="Artifacts" value={o.counts.artifacts} to="artifacts" />
-          <Stat label="Stars" value={o.counts.stars} to="stars" />
           <Stat label="Active sessions" value={o.counts.sessions} to="sessions" />
         </div>
       </section>

@@ -18,7 +18,7 @@ Choose your usual fabs under Settings → **Manufacturing & parts** to compare a
 
 ## Changelog
 
-Every pull request has a **Design changes** panel, and the API exposes the same summary for any two revisions: `GET /api/repos/{owner}/{repo}/changelog?base=…&head=…`. It is generated from the semantic diff — parts added or removed, value edits (`R1: 10k → 4k7`), new and removed nets, via and length changes — so release notes write themselves.
+Every commit and comparison has a **Design changes** panel, and the API exposes the same summary for any two revisions: `GET /api/repos/{owner}/{repo}/changelog?base=…&head=…`. It is generated from the semantic diff — parts added or removed, value edits (`R1: 10k → 4k7`), new and removed nets, via and length changes — so release notes write themselves.
 
 ## Part policy
 

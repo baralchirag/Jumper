@@ -1,5 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify';
-import { and, checkRuns, eq, inArray, pullEvents, pullRequests, repositories, type Repository, type User } from '@jumper/db';
+import { checkRuns, eq, repositories, type Repository, type User } from '@jumper/db';
 import { CHECK_NAMES } from '@jumper/shared';
 import type { Ctx } from '../../context';
 import { gitFor } from './access';
@@ -85,7 +85,7 @@ async function dropReplaced(ctx: Ctx, repoId: string, branch: string, newSha: st
   return dropped;
 }
 
-/** Post-push bookkeeping: default branch, PR heads, analysis jobs, events. */
+/** Post-push bookkeeping: default branch, analysis jobs, events. */
 export async function handleRefUpdates(
   ctx: Ctx,
   repo: Repository,
@@ -122,30 +122,6 @@ export async function handleRefUpdates(
       await enqueueAnalysis(ctx, repo.id, u.after, branch).catch((e) => log.error(e, 'enqueue failed'));
     }
 
-    const heads = await ctx.db
-      .select()
-      .from(pullRequests)
-      .where(and(eq(pullRequests.repoId, repo.id), eq(pullRequests.headRef, branch), eq(pullRequests.state, 'open')));
-    for (const pr of heads) {
-      if (u.after) {
-        await ctx.db.update(pullRequests).set({ headSha: u.after, updatedAt: new Date() }).where(eq(pullRequests.id, pr.id));
-      }
-      const commits = u.before && u.after ? (await git.commitsBetween(u.before, u.after, 100).catch(() => [])).length : 0;
-      await ctx.db.insert(pullEvents).values({
-        pullId: pr.id,
-        actorId: actor?.id ?? null,
-        kind: 'pushed',
-        data: { before: u.before, after: u.after, commits, forced: u.before && u.after ? !(await git.isAncestor(u.before, u.after).catch(() => true)) : false },
-      });
-      await ctx.publish({ type: 'pr', repoId: repo.id, number: pr.number, action: 'synchronize' });
-    }
-
-    if (u.after) {
-      await ctx.db
-        .update(pullRequests)
-        .set({ baseSha: u.after })
-        .where(and(eq(pullRequests.repoId, repo.id), eq(pullRequests.baseRef, branch), inArray(pullRequests.state, ['open'])));
-    }
     await ctx.publish({ type: 'push', repoId: repo.id, ref: u.ref, before: u.before, after: u.after });
   }
 }

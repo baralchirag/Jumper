@@ -1,15 +1,9 @@
 import { Link, Outlet, useLocation, useParams } from '@tanstack/react-router';
-import { useState } from 'react';
-import { useNavigate } from '@tanstack/react-router';
-import { useQueryClient } from '@tanstack/react-query';
-import { CircleDot, Code, Cpu, FolderDown, GitPullRequest, Globe, ListChecks, Lock, MessagesSquare, Settings, Star, Tag } from 'lucide-react';
-import type { RepoInfo } from '@jumper/shared';
-import { Label, PageSpinner, UnderlineNav, cx, type NavItem } from '@jumper/ui';
+import { Code, Cpu, FolderDown, GitCompare, Globe, ListChecks, Lock, Settings } from 'lucide-react';
+import { Label, PageSpinner, UnderlineNav, type NavItem } from '@jumper/ui';
 import { ErrorView, PageContainer } from '../../shared/components/common';
-import { api, repoPath } from '../../shared/lib/api';
-import { keys, useMe, useRepo } from '../../shared/lib/queries';
+import { useRepo } from '../../shared/lib/queries';
 import { useRepoEvents } from '../../shared/lib/ws';
-import { ForkButton } from './ForkButton';
 import { RepoContext } from './context';
 
 export function RepoLayout() {
@@ -24,7 +18,7 @@ export function RepoLayout() {
   const base = `/${owner}/${repo}`;
   const rest = pathname.slice(base.length);
   const section =
-    rest.startsWith('/pull') || rest.startsWith('/compare') ? 'pulls' : rest.startsWith('/issues') || rest.startsWith('/milestones') ? 'issues' : rest.startsWith('/discussions') ? 'discussions' : rest.startsWith('/checks') ? 'checks' : rest.startsWith('/outputs') ? 'outputs' : rest.startsWith('/parts') || rest.startsWith('/bom-alerts') ? 'parts' : rest.startsWith('/releases') ? 'releases' : rest.startsWith('/settings') ? 'settings' : 'code';
+    rest.startsWith('/compare') ? 'compare' : rest.startsWith('/checks') ? 'checks' : rest.startsWith('/outputs') ? 'outputs' : rest.startsWith('/parts') || rest.startsWith('/bom-alerts') ? 'parts' : rest.startsWith('/settings') ? 'settings' : 'code';
 
   const items: NavItem[] = [
     {
@@ -39,35 +33,12 @@ export function RepoLayout() {
       ),
     },
     {
-      key: 'pulls',
-      label: 'Pull requests',
-      icon: <GitPullRequest size={16} />,
-      count: info.openPullCount,
-      active: section === 'pulls',
+      key: 'compare',
+      label: 'Compare',
+      icon: <GitCompare size={16} />,
+      active: section === 'compare',
       render: (p) => (
-        <Link to="/$owner/$repo/pulls" params={{ owner, repo }} search={{ state: 'open' }} className={p.className}>
-          {p.children}
-        </Link>
-      ),
-    },
-    {
-      key: 'issues',
-      label: 'Issues',
-      icon: <CircleDot size={16} />,
-      active: section === 'issues',
-      render: (p) => (
-        <Link to="/$owner/$repo/issues" params={{ owner, repo }} search={{}} className={p.className}>
-          {p.children}
-        </Link>
-      ),
-    },
-    {
-      key: 'discussions',
-      label: 'Discussions',
-      icon: <MessagesSquare size={16} />,
-      active: section === 'discussions',
-      render: (p) => (
-        <Link to="/$owner/$repo/discussions" params={{ owner, repo }} search={{}} className={p.className}>
+        <Link to="/$owner/$repo/compare" params={{ owner, repo }} search={{}} className={p.className}>
           {p.children}
         </Link>
       ),
@@ -101,17 +72,6 @@ export function RepoLayout() {
       active: section === 'parts',
       render: (p) => (
         <Link to="/$owner/$repo/parts" params={{ owner, repo }} className={p.className}>
-          {p.children}
-        </Link>
-      ),
-    },
-    {
-      key: 'releases',
-      label: 'Releases',
-      icon: <Tag size={16} />,
-      active: section === 'releases',
-      render: (p) => (
-        <Link to="/$owner/$repo/releases" params={{ owner, repo }} className={p.className}>
           {p.children}
         </Link>
       ),
@@ -152,19 +112,7 @@ export function RepoLayout() {
                   {info.visibility === 'private' ? 'Private' : 'Public'}
                 </Label>
               </div>
-              {info.forkOf && (
-                <p className="mt-1.5 text-sm text-fg-muted">
-                  Forked from{' '}
-                  <Link to="/$owner/$repo" params={{ owner: info.forkOf.owner, repo: info.forkOf.name }} className="link">
-                    {info.forkOf.owner}/{info.forkOf.name}
-                  </Link>
-                </p>
-              )}
               {info.description && <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-fg-muted">{info.description}</p>}
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <StarButton info={info} />
-              <ForkButton info={info} />
             </div>
           </div>
           <UnderlineNav items={items} className="-mx-3 border-b-0" />
@@ -174,43 +122,5 @@ export function RepoLayout() {
         <Outlet />
       </PageContainer>
     </RepoContext.Provider>
-  );
-}
-
-function StarButton({ info }: { info: RepoInfo }) {
-  const { data: me } = useMe();
-  const qc = useQueryClient();
-  const navigate = useNavigate();
-  const [busy, setBusy] = useState(false);
-  const infoKey = [...keys.repo(info.owner, info.name), 'info'];
-  const toggle = async () => {
-    if (!me) return void navigate({ to: '/login', search: { redirect: `/${info.owner}/${info.name}` } });
-    setBusy(true);
-    const next = !info.starred;
-    // Optimistic: flip immediately, reconcile with the server's count.
-    qc.setQueryData<RepoInfo>(infoKey, (old) => old && { ...old, starred: next, starCount: old.starCount + (next ? 1 : -1) });
-    try {
-      const res = next ? await api.put<{ starCount: number }>(repoPath(info.owner, info.name, '/star')) : await api.delete<{ starCount: number }>(repoPath(info.owner, info.name, '/star'));
-      qc.setQueryData<RepoInfo>(infoKey, (old) => old && { ...old, starred: next, starCount: res.starCount });
-      void qc.invalidateQueries({ queryKey: ['repos'] });
-    } catch {
-      void qc.invalidateQueries({ queryKey: infoKey });
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <button
-      onClick={() => void toggle()}
-      disabled={busy}
-      aria-pressed={info.starred}
-      className="inline-flex h-7 items-stretch overflow-hidden rounded-sm border border-border text-xs transition-colors hover:border-fg-subtle"
-    >
-      <span className="flex items-center gap-1.5 px-2.5">
-        <Star size={13} className={cx(info.starred ? 'fill-current text-attention' : 'text-fg-muted')} />
-        {info.starred ? 'Starred' : 'Star'}
-      </span>
-      <span className="flex items-center border-l border-border px-2 font-mono tabular-nums text-fg-muted">{info.starCount}</span>
-    </button>
   );
 }

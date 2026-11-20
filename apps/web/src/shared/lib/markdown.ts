@@ -8,7 +8,7 @@ export interface MarkdownContext {
   /** Resolve repo-relative links/images, e.g. to blob/raw URLs. */
   resolveLink?: (href: string) => string;
   resolveImage?: (src: string) => string;
-  /** Repository the text belongs to: enables `#12` pull request references. */
+  /** Repository the text belongs to. */
   repo?: { owner: string; name: string };
   /** Treat single newlines as line breaks (comments), like GitHub. */
   breaks?: boolean;
@@ -167,18 +167,6 @@ export function renderMarkdown(md: string, ctx: MarkdownContext = {}): string {
     frag.append(m[1]!, a);
     return frag;
   });
-  if (ctx.repo) {
-    const { owner, name } = ctx.repo;
-    replaceText(root, /(^|[^\w&/#])#(\d{1,7})\b/g, (m, d) => {
-      const frag = d.createDocumentFragment();
-      const a = d.createElement('a');
-      a.className = 'issue-ref';
-      a.href = `/${owner}/${name}/pull/${m[2]}`;
-      a.textContent = `#${m[2]}`;
-      frag.append(m[1]!, a);
-      return frag;
-    });
-  }
 
   for (const a of root.querySelectorAll('a[href]')) {
     const href = a.getAttribute('href')!;

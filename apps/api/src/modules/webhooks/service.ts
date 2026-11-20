@@ -92,12 +92,8 @@ export function toWebhookEvent(e: PlatformEvent): WebhookEvent | null {
   switch (e.type) {
     case 'push':
       return 'push';
-    case 'pr':
-      return 'pull_request';
     case 'check':
       return e.status === 'completed' ? 'check' : null;
-    case 'issue':
-      return e.action === 'commented' ? 'issue_comment' : 'issues';
   }
 }
 
@@ -124,10 +120,6 @@ function eventFields(e: PlatformEvent): Record<string, unknown> {
   switch (e.type) {
     case 'push':
       return { ref: e.ref, before: e.before, after: e.after };
-    case 'pr':
-      return { action: e.action, number: e.number };
-    case 'issue':
-      return { action: e.action, number: e.number };
     case 'check':
       return { sha: e.sha, name: e.name, projectPath: e.projectPath, conclusion: e.conclusion };
   }

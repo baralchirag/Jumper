@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, CalendarDays, FolderGit2, Link2, MapPin, Pin, Plus, Settings, Star, Tag, Users } from 'lucide-react';
+import { Building2, CalendarDays, FolderGit2, Link2, MapPin, Pin, Plus, Settings } from 'lucide-react';
 import type { NamespaceInfo } from '@jumper/shared';
 import { Avatar, Button, Checkbox, Dialog, Flash, PageSpinner, buttonClass } from '@jumper/ui';
 import { BoardCard } from '../../shared/components/BoardCard';
@@ -11,7 +11,6 @@ import { RepoList } from '../../shared/components/RepoList';
 import { ErrorView, PageContainer, UserLink } from '../../shared/components/common';
 import { api } from '../../shared/lib/api';
 import { useMe } from '../../shared/lib/queries';
-import { FollowButton, PeopleDialog } from './People';
 import { PlanBadge } from '../../shared/components/PlanBadge';
 
 export function OwnerPage() {
@@ -73,37 +72,15 @@ export function OwnerPage() {
             <li className="flex items-center gap-1.5">
               <FolderGit2 size={13} /> <span className="font-mono tabular-nums text-fg">{ns.repos.length}</span> projects
             </li>
-            {ns.stats && ns.stats.releases > 0 && (
-              <li className="flex items-center gap-1.5">
-                <Tag size={13} /> <span className="font-mono tabular-nums text-fg">{ns.stats.releases}</span> releases
-              </li>
-            )}
-            {ns.stats && ns.stats.starsReceived > 0 && (
-              <li className="flex items-center gap-1.5" title="Stars on public projects">
-                <Star size={13} fill="currentColor" fillOpacity={0.25} /> <span className="font-mono tabular-nums text-fg">{ns.stats.starsReceived}</span> stars received
-              </li>
-            )}
-            {ns.starCount !== undefined && (
-              <li className="flex items-center gap-1.5">
-                <Star size={13} /> <span className="font-mono tabular-nums text-fg">{ns.starCount}</span> starred
-              </li>
-            )}
             <li className="flex items-center gap-1.5">
               <CalendarDays size={13} /> Joined {joined.toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
             </li>
-            {!isOrg && ns.followers !== undefined && <PeopleCounts ns={ns} />}
-            {isMe ? (
+            {isMe && (
               <li className="ml-auto">
                 <Link to="/settings" className={buttonClass('default', 'sm')}>
                   Edit profile
                 </Link>
               </li>
-            ) : (
-              !isOrg && (
-                <li className="ml-auto">
-                  <FollowButton username={ns.slug} following={Boolean(ns.viewerFollows)} />
-                </li>
-              )
             )}
           </ul>
         </PageContainer>
@@ -269,20 +246,3 @@ function PinEditor({ ns }: { ns: NamespaceInfo }) {
   );
 }
 
-/** "12 followers · 4 following", each opening the list. */
-function PeopleCounts({ ns }: { ns: NamespaceInfo }) {
-  const [open, setOpen] = useState<'followers' | 'following' | null>(null);
-  return (
-    <li className="flex items-center gap-1.5">
-      <Users size={13} aria-hidden />
-      <button type="button" onClick={() => setOpen('followers')} className="hover:text-fg">
-        <span className="font-mono tabular-nums text-fg">{ns.followers}</span> {ns.followers === 1 ? 'follower' : 'followers'}
-      </button>
-      <span aria-hidden>·</span>
-      <button type="button" onClick={() => setOpen('following')} className="hover:text-fg">
-        <span className="font-mono tabular-nums text-fg">{ns.following}</span> following
-      </button>
-      <PeopleDialog username={ns.slug} kind={open ?? 'followers'} open={open !== null} onClose={() => setOpen(null)} />
-    </li>
-  );
-}

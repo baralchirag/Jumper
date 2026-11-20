@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useParams, useRouterState } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { BookOpen, Bell, Building2, Database, KeyRound, LogOut, Menu, Monitor, Moon, Plus, Search, Settings, Shield, Star, Sun, Tag, User } from 'lucide-react';
+import { BookOpen, Bell, Building2, Database, KeyRound, LogOut, Menu, Monitor, Moon, Plus, Search, Settings, Shield, Sun, Tag, User } from 'lucide-react';
 import { Avatar, Dropdown, MenuHeader, MenuItem, cx } from '@jumper/ui';
 import { NotificationBell } from '../features/notifications/Notifications';
 import { api } from '../shared/lib/api';
@@ -196,11 +196,9 @@ function FullShell() {
   };
 
   const nav = [
-    { to: '/explore', label: 'Explore', icon: <Search size={14} /> },
     // Paying accounts have already chosen: the pricing page is for people still deciding.
     ...(isPaidPlan(me?.plan) ? [] : [{ to: '/pricing', label: 'Pricing', icon: <Tag size={14} /> }]),
     { to: '/docs', label: 'Docs', icon: <BookOpen size={14} /> },
-    ...(me ? [{ to: '/stars', label: 'Stars', icon: <Star size={14} /> }] : []),
     ...(me?.isAdmin ? [{ to: '/admin', label: 'Admin', icon: <Shield size={14} /> }] : []),
   ];
 
@@ -291,9 +289,6 @@ function FullShell() {
                       <div className="py-1">
                         <MenuItem icon={<User size={14} />} onClick={() => (close(), void navigate({ to: '/$owner', params: { owner: me.username } }))}>
                           Your profile
-                        </MenuItem>
-                        <MenuItem icon={<Star size={14} />} onClick={() => (close(), go('/stars'))}>
-                          Your stars
                         </MenuItem>
                         <MenuItem icon={<Bell size={14} />} onClick={() => (close(), go('/notifications'))}>
                           Notifications
@@ -390,7 +385,6 @@ function SiteFooter({ signedIn, paid }: { signedIn: boolean; paid: boolean }) {
           <FooterCol
             title="Product"
             links={[
-              { label: 'Explore', to: '/explore' },
               ...(paid ? [] : [{ label: 'Pricing', to: '/pricing' }]),
               { label: 'New repository', to: '/new' },
               { label: 'KiCad plugin', to: '/docs/kicad-plugin' },

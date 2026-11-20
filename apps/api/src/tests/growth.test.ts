@@ -1,9 +1,9 @@
-// Stage 5: Explore (featured, trending), portfolio profiles (pins, stats), referrals and the embeddable viewer.
+// Profiles (pins, stats), referrals and the embeddable viewer.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { sql } from '@jumper/db';
 import { commitFiles, createHarness, dbAvailable, type Harness } from '../testing/harness';
 
-describe.skipIf(!dbAvailable)('explore, profiles, referrals and embeds', () => {
+describe.skipIf(!dbAvailable)('profiles, referrals and embeds', () => {
   let h: Harness;
   beforeAll(async () => {
     h = await createHarness({ env: { PLANS_ENFORCED: 'true', REFERRAL_BONUS_MB: '1024', REFERRAL_MAX_BONUS_MB: '2048' } });
@@ -11,43 +11,12 @@ describe.skipIf(!dbAvailable)('explore, profiles, referrals and embeds', () => {
   afterAll(() => h.close());
   beforeEach(() => h.reset());
 
-  const admin = async (name: string) => {
-    const c = await h.user(name);
-    await h.ctx.db.execute(sql`update users set is_admin = true where username = ${name}`);
-    return c;
-  };
-
-  it('features public repositories and ranks trending ones by recent stars', async () => {
-    const alice = await h.user('alice');
-    const bob = await h.user('bob');
-    const root = await admin('root');
-    await h.repo(alice, 'quiet');
-    await h.repo(alice, 'busy');
-    await h.repo(alice, 'secret', { visibility: 'private' });
-    expect((await bob.put('/api/repos/alice/busy/star')).status).toBeLessThan(300);
-    expect((await root.put('/api/repos/alice/busy/star')).status).toBeLessThan(300);
-
-    expect((await alice.put('/api/admin/repos/alice/quiet/featured', { featured: true })).status).toBe(403);
-    expect((await root.put('/api/admin/repos/alice/secret/featured', { featured: true })).status).toBe(400);
-    expect((await root.put('/api/admin/repos/alice/quiet/featured', { featured: true })).status).toBe(200);
-
-    const e = await h.anon.get('/api/explore');
-    expect(e.status, e.body).toBe(200);
-    expect(e.json.featured.map((r: { name: string }) => r.name)).toEqual(['quiet']);
-    expect(e.json.featured[0].featured).toBe(true);
-    expect(e.json.trending[0].name).toBe('busy');
-    expect(JSON.stringify(e.json)).not.toContain('secret');
-    const trending = await h.anon.get('/api/repos?sort=trending');
-    expect(trending.json[0].name).toBe('busy');
-  });
-
-  it('pins repositories to a profile and reports portfolio stats', async () => {
+  it('pins repositories to a profile and counts public work', async () => {
     const alice = await h.user('alice');
     const bob = await h.user('bob');
     await h.repo(alice, 'one');
     await h.repo(alice, 'two');
     await h.repo(alice, 'hidden', { visibility: 'private' });
-    await bob.put('/api/repos/alice/two/star');
     expect((await bob.put('/api/namespaces/alice/pins', { repos: ['one'] })).status).toBe(403);
     expect((await alice.put('/api/namespaces/alice/pins', { repos: ['nope'] })).status).toBe(400);
     expect((await alice.put('/api/namespaces/alice/pins', { repos: ['two', 'hidden', 'one'] })).status).toBe(200);
@@ -57,7 +26,7 @@ describe.skipIf(!dbAvailable)('explore, profiles, referrals and embeds', () => {
     // Visitors only see pins they can read, and stats count public work.
     const theirs = await h.anon.get('/api/namespaces/alice');
     expect(theirs.json.pinned.map((r: { name: string }) => r.name)).toEqual(['two', 'one']);
-    expect(theirs.json.stats).toEqual({ repos: 2, releases: 0, starsReceived: 1, forksReceived: 0 });
+    expect(theirs.json.stats).toEqual({ repos: 2 });
   });
 
   it('records referrals and adds capped bonus storage to the inviter', async () => {

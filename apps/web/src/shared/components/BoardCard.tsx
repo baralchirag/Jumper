@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { CircuitBoard, GitFork, Lock, Star } from 'lucide-react';
+import { CircuitBoard, Lock } from 'lucide-react';
 import type { RepoInfo } from '@jumper/shared';
 import { RelativeTime, cx } from '@jumper/ui';
 
@@ -34,8 +34,6 @@ export function BoardCard({ repo, showOwner = true, rank }: { repo: RepoInfo; sh
         </span>
         {repo.description && <p className="line-clamp-2 text-[13px] leading-snug text-fg-muted">{repo.description}</p>}
         <span className={cx('mt-auto flex items-center gap-3 pt-2 text-xs text-fg-subtle')}>
-          <span className="inline-flex items-center gap-1"><Star size={12} /> {repo.starCount}</span>
-          {repo.forkCount > 0 && <span className="inline-flex items-center gap-1"><GitFork size={12} /> {repo.forkCount}</span>}
           {repo.pushedAt && <span className="ml-auto">updated <RelativeTime date={repo.pushedAt} /></span>}
         </span>
       </div>

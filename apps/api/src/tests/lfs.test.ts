@@ -74,7 +74,7 @@ describe.skipIf(!dbAvailable)('git LFS', () => {
     expect(over.json().message).toContain('storage');
   });
 
-  it('applies repository permissions; forks read the original objects', async () => {
+  it('applies repository permissions', async () => {
     const src = await h.repo(alice, 'board');
     await commitFiles(src.git, { 'a.txt': 'x' });
     const data = Buffer.from('datasheet');
@@ -86,11 +86,7 @@ describe.skipIf(!dbAvailable)('git LFS', () => {
     expect((await batch('/alice/board.git', { operation: 'upload', objects: [{ oid: 'e'.repeat(64), size: 1 }] }, bobAuth)).statusCode).toBe(403);
     expect((await batch('/alice/board.git', { operation: 'upload', objects: [{ oid: 'e'.repeat(64), size: 1 }] })).statusCode).toBe(401);
 
-    const fork = await bob.post('/api/repos/alice/board/fork', {});
-    expect(fork.status, fork.body).toBe(200);
-    const viaFork = await batch('/bob/board.git', { operation: 'download', objects: [{ oid, size: data.length }] }, bobAuth);
-    expect(viaFork.json().objects[0].actions.download.href).toContain('/bob/board.git/');
-    const get = await h.app.inject({ method: 'GET', url: `/bob/board.git/info/lfs/objects/${oid}`, headers: { authorization: bobAuth } });
+    const get = await h.app.inject({ method: 'GET', url: `/alice/board.git/info/lfs/objects/${oid}`, headers: { authorization: bobAuth } });
     expect(get.rawPayload.toString()).toBe('datasheet');
 
     const priv = await h.repo(alice, 'secret', { visibility: 'private' });

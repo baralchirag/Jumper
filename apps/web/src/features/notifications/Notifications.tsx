@@ -65,7 +65,7 @@ export function NotificationsPage() {
       </div>
       <Box>
         <BoxHeader className="text-sm font-medium">{q.data?.unread ? `${q.data.unread} unread` : 'All caught up'}</BoxHeader>
-        {items.length === 0 && <EmptyState icon={<Bell size={26} />} title="Nothing here yet">When someone mentions you or assigns you an issue, it shows up here.</EmptyState>}
+        {items.length === 0 && <EmptyState icon={<Bell size={26} />} title="Nothing here yet">Stock and end-of-life alerts for the parts in your boards show up here.</EmptyState>}
         {items.map((n) => (
           <BoxRow
             key={n.id}

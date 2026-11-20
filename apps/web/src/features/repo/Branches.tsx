@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { GitPullRequest, Trash2 } from 'lucide-react';
+import { GitCompare, Trash2 } from 'lucide-react';
 import { Box, BoxHeader, BoxRow, Flash, IconButton, Label, PageSpinner, RelativeTime, buttonClass } from '@jumper/ui';
 import { CheckIcon, rollup } from '../checks/CheckStatus';
 import { ErrorView } from '../../shared/components/common';
@@ -62,7 +62,7 @@ export function BranchesPage() {
             {!b.isDefault && canWrite(info) && (
               <>
                 <Link to="/$owner/$repo/compare" params={{ owner: info.owner, repo: info.name }} search={{ base: info.defaultBranch, head: b.name }} className={buttonClass('default', 'sm')}>
-                  <GitPullRequest size={14} /> New pull request
+                  <GitCompare size={14} /> Compare
                 </Link>
                 <IconButton label="Delete branch" size="sm" icon={<Trash2 size={14} />} onClick={() => void remove(b.name)} />
               </>

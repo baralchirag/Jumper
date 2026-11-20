@@ -1,13 +1,14 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useNavigate } from '@tanstack/react-router';
+import { Link, Navigate, useNavigate } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { Button, Flash, FormField, Input, PageSpinner } from '@jumper/ui';
+import { Button, Flash, FormField, Input, PageSpinner, buttonClass } from '@jumper/ui';
 import { PageContainer } from '../../shared/components/common';
 import { api, errorMessage } from '../../shared/lib/api';
-import { keys, useMe } from '../../shared/lib/queries';
+import { keys, useMe, useSite } from '../../shared/lib/queries';
 
 export function NewOrgPage() {
   const { data: me, isLoading } = useMe();
+  const site = useSite();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [form, setForm] = useState({ slug: '', name: '', description: '' });
@@ -15,6 +16,25 @@ export function NewOrgPage() {
   const [busy, setBusy] = useState(false);
   if (isLoading) return <PageSpinner />;
   if (!me) return <Navigate to="/login" search={{ redirect: '/organizations/new' }} />;
+  // On the hosted service organizations come with a paid plan (the API enforces this too).
+  if (site.data?.plansEnforced && me.plan === 'free' && !me.isAdmin) {
+    return (
+      <PageContainer className="max-w-xl py-10">
+        <h1 className="border-b border-border pb-6 headline text-[length:var(--t-l)]">Organizations are for teams on a paid plan</h1>
+        <p className="mt-5 text-[15px] leading-relaxed text-fg-muted">
+          An organization gives your team shared boards, roles, single sign-on and one bill. It comes with Pro for small teams and with Business for companies.
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link to="/pricing" search={{ for: 'organization' }} className={buttonClass('accent', 'md')}>
+            See team plans
+          </Link>
+          <Link to="/settings/$section" params={{ section: 'usage' }} className={buttonClass('default', 'md')}>
+            Your plan
+          </Link>
+        </div>
+      </PageContainer>
+    );
+  }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();

@@ -11,10 +11,10 @@ import { useMe } from '../../shared/lib/queries';
 type Start = 'empty' | 'sample' | 'template' | 'import';
 
 const STARTS: { id: Start; title: string; hint: string; icon: React.ReactNode }[] = [
-  { id: 'empty', title: 'Empty repository', hint: 'Push your own project from your computer.', icon: <FilePlus2 size={18} /> },
+  { id: 'import', title: 'Connect from GitHub', hint: 'Keep your repo on GitHub; Jumper follows it and checks every commit.', icon: <Download size={18} /> },
+  { id: 'empty', title: 'Empty repository', hint: 'Push your project to Jumper directly.', icon: <FilePlus2 size={18} /> },
   { id: 'sample', title: 'Example board', hint: 'A small complete KiCad project to explore.', icon: <CircuitBoard size={18} /> },
   { id: 'template', title: 'Starter template', hint: 'A microcontroller board ready to lay out.', icon: <Cpu size={18} /> },
-  { id: 'import', title: 'Import from a URL', hint: 'Copy an existing git repository, history and all.', icon: <Download size={18} /> },
 ];
 
 /** "https://github.com/acme/power-board.git" -> "power-board" (a suggestion; the field stays editable). */
@@ -31,7 +31,7 @@ export function NewRepoPage() {
   const search = useSearch({ strict: false }) as { owner?: string };
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [start, setStart] = useState<Start>('empty');
+  const [start, setStart] = useState<Start>('import');
   const [owner, setOwner] = useState(search.owner ?? '');
   const [name, setName] = useState('');
   const [nameTouched, setNameTouched] = useState(false);
@@ -41,7 +41,8 @@ export function NewRepoPage() {
   const [url, setUrl] = useState('');
   const [username, setUsername] = useState('');
   const [token, setToken] = useState('');
-  const [mirror, setMirror] = useState<'none' | 'pull' | 'two-way'>('none');
+  // A GitHub companion: by default Jumper keeps following the original.
+  const [mirror, setMirror] = useState<'none' | 'pull' | 'two-way'>('pull');
   const [template, setTemplate] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -120,7 +121,7 @@ export function NewRepoPage() {
 
         {importing && (
           <div className="space-y-4 rounded-lg border border-border bg-canvas-subtle p-4">
-            <FormField label="Repository URL" required hint="The https:// address you would use with git clone. All branches and tags are copied.">
+            <FormField label="Repository URL" required hint="The https:// address you would use with git clone, from GitHub, GitLab or any git host. All branches and tags are copied.">
               {(id) => (
                 <Input
                   id={id}

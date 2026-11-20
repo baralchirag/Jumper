@@ -10,7 +10,6 @@ const params = z.object({ owner: z.string().max(100), repo: z.string().max(100) 
 const flags = z.object({
   blockDeletion: z.boolean(),
   blockForcePush: z.boolean(),
-  requirePullRequest: z.boolean(),
   enforceAdmins: z.boolean(),
 });
 
@@ -21,7 +20,6 @@ const protectionRoutes: FastifyPluginAsyncZod = async (app) => {
     pattern: r.pattern,
     blockDeletion: r.blockDeletion,
     blockForcePush: r.blockForcePush,
-    requirePullRequest: r.requirePullRequest,
     enforceAdmins: r.enforceAdmins,
     /** Set by the owner's policy or a legal hold; cannot be changed here. */
     inherited: isInherited(r) ? (r.id.startsWith('hold:') ? 'legal_hold' : 'policy') : null,

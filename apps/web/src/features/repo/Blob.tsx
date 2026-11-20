@@ -12,7 +12,6 @@ import { BomTable } from '../bom/BomTable';
 import { CostRollup } from '../bom/CostRollup';
 import { FabPanel } from '../design/FabPanel';
 import { PinmapPanel } from '../design/PinmapPanel';
-import { LocksPanel } from '../locks/LocksPanel';
 import { CodeView } from '../../shared/components/CodeView';
 import { DesignViewer, type DesignViewerHandle } from '../viewer/DesignViewer';
 import { Markdown } from '../../shared/components/Markdown';
@@ -184,7 +183,6 @@ export function BlobPage() {
         <RefPicker owner={info.owner} repo={info.name} value={gitRef} onChange={(r) => void navigate({ to: '/$owner/$repo/blob/$ref/$', params: { owner: info.owner, repo: info.name, ref: r, _splat: path } })} />
         <Breadcrumbs owner={info.owner} repo={info.name} gitRef={gitRef} path={path} />
       </div>
-      {design && <LocksPanel path={path} />}
       <Box className="overflow-hidden">
         <BoxHeader className="flex-wrap">
           {design ? (

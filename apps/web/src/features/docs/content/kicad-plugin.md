@@ -40,7 +40,7 @@ The plugin creates the git repository if needed, adds a `.gitignore` for KiCad's
 | **Commit and push** | Saves every changed file in one commit with your message, then pushes the current branch. |
 | **Pull** | Fetches new commits from Jumper and fast-forwards your copy. Reopen the board afterwards (**File → Revert**) to load them. |
 | **New branch…** | Starts a branch for a change you want reviewed. Your uncommitted work comes along. |
-| **Open pull request** | Opens Jumper with this branch ready to compare against `main`, so your team reviews the board change as a board. |
+| **Compare on Jumper** | Opens Jumper with this branch compared against `main`, so your team sees the board change as a board. |
 | **View checks** | Opens the ERC, DRC, render and BOM results for your latest push. The dialog also shows them live: running, passed or which checks failed. |
 | **Open on Jumper** | Opens the repository in your browser, with the renders and check results for your latest push. |
 | **Token…** | Changes or removes the saved access token for this server. |
@@ -54,10 +54,10 @@ The dialog shows how many commits are waiting on Jumper and how many of yours ar
 
 The plugin never merges or rewrites history on its own. If a teammate pushed while you were working, **Push** says someone else pushed first and **Pull** says both copies have new commits. Two ways forward:
 
-- **Push to a branch:** in a terminal, `git push origin HEAD:my-change`, then open a pull request on Jumper and review the visual diff there.
+- **Push to a branch:** in a terminal, `git push origin HEAD:my-change`, then open **Compare** on Jumper and review the visual diff there.
 - **Rebase:** in a terminal in the project folder, `git pull --rebase`. Then reopen the board in KiCad, check it, and push.
 
-Branch protection works as usual: if `main` requires pull requests, push to a branch.
+Branch protection works as usual: a protected branch refuses force-pushes and deletion.
 
 ## Where the token is stored
 

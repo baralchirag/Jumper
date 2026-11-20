@@ -71,7 +71,6 @@ export const jumperConfigSchema = z
       })
       .prefault({}),
     /** Checks that must succeed before a pull request can be merged. */
-    required_checks: z.array(z.string()).default(['ERC', 'DRC']),
   })
   .prefault({});
 

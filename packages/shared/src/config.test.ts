@@ -6,7 +6,6 @@ describe('parseJumperConfig', () => {
     const { config, error } = parseJumperConfig('');
     expect(error).toBeNull();
     expect(config.checks.drc.enabled).toBe(true);
-    expect(config.required_checks).toEqual(['ERC', 'DRC']);
   });
 
   it('merges partial config with defaults', () => {

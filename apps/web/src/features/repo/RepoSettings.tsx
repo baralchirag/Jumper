@@ -1,18 +1,17 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeftRight, GitBranch, Link2, ListChecks, Package, ShieldCheck, Trash2, Users, Webhook, Settings as Cog, TriangleAlert } from 'lucide-react';
+import { ArrowLeftRight, GitBranch, Link2, Package, Trash2, Users, Webhook, Settings as Cog, TriangleAlert } from 'lucide-react';
 import type { RepoInfo, RepoRole, UserSummary } from '@jumper/shared';
 import { Box, BoxRow, Button, Checkbox, Dialog, Flash, FormField, IconButton, Input, Select, cx } from '@jumper/ui';
 import { BranchProtectionPanel } from './BranchProtectionPanel';
 import { MirrorsPanel } from './MirrorsPanel';
-import { ApprovalRulesPanel } from '../review/ApprovalRulesPanel';
 import { RepoConfigPanel } from '../settings/RepoConfigPanel';
 import { ShareLinksPanel } from '../share/ShareLinksPanel';
 import { WebhooksPanel } from '../webhooks/WebhooksPanel';
 import { NotFound, UserLink } from '../../shared/components/common';
 import { api, errorMessage, repoPath } from '../../shared/lib/api';
-import { keys, useMe, useBranches } from '../../shared/lib/queries';
+import { keys, useBranches } from '../../shared/lib/queries';
 import { useRepoInfo } from './context';
 
 function General() {
@@ -25,7 +24,6 @@ function General() {
     description: info.description,
     visibility: info.visibility,
     defaultBranch: info.defaultBranch,
-    requiredApprovals: info.requiredApprovals,
     exportControlled: info.exportControlled,
   });
   const [msg, setMsg] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
@@ -68,9 +66,6 @@ function General() {
           )}
         </FormField>
       )}
-      <FormField label="Required approvals" hint="Approving reviews needed before a pull request can be merged. Required checks are configured in .jumper.yml.">
-        {(id) => <Input id={id} type="number" min={0} max={10} value={form.requiredApprovals} onChange={(e) => setForm({ ...form, requiredApprovals: Number(e.target.value) })} className="w-24" />}
-      </FormField>
       <Checkbox
         checked={form.exportControlled}
         onChange={(e) => setForm({ ...form, exportControlled: e.target.checked, visibility: e.target.checked ? 'private' : form.visibility })}
@@ -80,32 +75,7 @@ function General() {
       <Button type="submit" variant="primary" loading={busy}>
         Save changes
       </Button>
-      <FeatureToggle />
     </form>
-  );
-}
-
-/** Administrators pick repositories for the Featured row on Explore. */
-function FeatureToggle() {
-  const info = useRepoInfo();
-  const qc = useQueryClient();
-  const { data: me } = useMe();
-  const [error, setError] = useState<string | null>(null);
-  if (!me?.isAdmin || info.visibility !== 'public') return null;
-  const toggle = async (featured: boolean) => {
-    try {
-      await api.put(`/admin/repos/${encodeURIComponent(info.owner)}/${encodeURIComponent(info.name)}/featured`, { featured });
-      await qc.invalidateQueries({ queryKey: keys.repo(info.owner, info.name) });
-      await qc.invalidateQueries({ queryKey: ['explore'] });
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  };
-  return (
-    <div className="border-t border-border pt-6">
-      <Checkbox checked={Boolean(info.featured)} onChange={(e) => void toggle(e.target.checked)} label="Feature on Explore" hint="Shown to everyone in the Featured row, newest pick first. Only administrators see this." />
-      {error && <p className="mt-2 text-xs text-danger">{error}</p>}
-    </div>
   );
 }
 
@@ -176,7 +146,7 @@ function DangerZone() {
       <div className="flex items-center gap-4 p-4">
         <div className="flex-1">
           <div className="font-semibold">Delete this repository</div>
-          <div className="text-sm text-fg-muted">Removes the git history, pull requests, checks and artifacts. This cannot be undone.</div>
+          <div className="text-sm text-fg-muted">Removes the git history, checks and outputs. This cannot be undone.</div>
         </div>
         <Button variant="danger" onClick={() => setOpen(true)}>
           Delete repository
@@ -202,10 +172,9 @@ function DangerZone() {
 }
 
 const SECTIONS = [
-  { id: 'general', label: 'General', icon: <Cog size={15} />, title: 'General', blurb: 'Name, description, visibility and how pull requests are approved.' },
-  { id: 'collaborators', label: 'Collaborators', icon: <Users size={15} />, title: 'Collaborators', blurb: 'Who can read, change or administer this repository. Read can view and open issues; Write can push, review and triage; Admin can change these settings.' },
-  { id: 'branches', label: 'Branch protection', icon: <GitBranch size={15} />, title: 'Branch protection', blurb: 'Stop important branches from being rewritten, deleted or pushed to directly. Rules are enforced by git on every push, from any client.' },
-  { id: 'review', label: 'Review process', icon: <ListChecks size={15} />, title: 'Review process', blurb: 'Make every pull request go through the same checks: a checklist reviewers tick off, and sign-off rules for sensitive areas of the design.' },
+  { id: 'general', label: 'General', icon: <Cog size={15} />, title: 'General', blurb: 'Name, description, visibility and default branch.' },
+  { id: 'collaborators', label: 'Collaborators', icon: <Users size={15} />, title: 'Collaborators', blurb: 'Who can read, change or administer this repository. Read can view the design and its outputs; Write can push; Admin can change these settings.' },
+  { id: 'branches', label: 'Branch protection', icon: <GitBranch size={15} />, title: 'Branch protection', blurb: 'Stop important branches from being rewritten or deleted. Rules are enforced by git on every push, from any client.' },
   { id: 'manufacturing', label: 'Manufacturing & parts', icon: <Package size={15} />, title: 'Manufacturing & parts', blurb: 'Tell Jumper which fabs you build at and which parts are allowed, so boards and BOMs are checked against your real constraints.' },
   { id: 'webhooks', label: 'Webhooks', icon: <Webhook size={15} />, title: 'Webhooks', blurb: 'Send an HTTP request to your own service when something happens here — to trigger CI, post to chat or kick off an order.' },
   { id: 'mirroring', label: 'Mirroring', icon: <ArrowLeftRight size={15} />, title: 'Mirroring', blurb: 'Keep this repository in step with a copy on GitHub, GitLab or another git host: push changes there, pull changes from there, or both.' },
@@ -246,25 +215,6 @@ export function RepoSettingsPage() {
         {active.id === 'general' && <General />}
         {active.id === 'collaborators' && <Collaborators />}
         {active.id === 'branches' && <BranchProtectionPanel />}
-        {active.id === 'review' && (
-          <div className="space-y-10">
-            <section>
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                <ListChecks size={15} /> Checklist
-              </h3>
-              <RepoConfigPanel section="review" />
-            </section>
-            <section>
-              <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold">
-                <ShieldCheck size={15} /> Sign-off rules
-              </h3>
-              <p className="mb-3 max-w-2xl text-sm text-fg-muted">
-                A rule says “changes to these files need approval from these people”. A pull request that touches a matching file cannot be merged until the rule is satisfied — for example, power-supply changes signed off by your power engineer.
-              </p>
-              <ApprovalRulesPanel />
-            </section>
-          </div>
-        )}
         {active.id === 'manufacturing' && <RepoConfigPanel section="parts" />}
         {active.id === 'webhooks' && <WebhooksPanel />}
         {active.id === 'mirroring' && <MirrorsPanel />}

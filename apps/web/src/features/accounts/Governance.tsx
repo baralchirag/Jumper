@@ -165,11 +165,11 @@ export function MemberRolesPanel({ owner }: { owner: string }) {
         </div>
         <div>
           <dt className="inline font-medium text-fg">Reviewer</dt>{' '}
-          <dd className="inline">also approves pull requests and triages issues.</dd>
+          <dd className="inline">also downloads outputs and fab packages.</dd>
         </div>
         <div>
           <dt className="inline font-medium text-fg">Committer</dt>{' '}
-          <dd className="inline">also pushes, merges and releases.</dd>
+          <dd className="inline">also pushes.</dd>
         </div>
         <div>
           <dt className="inline font-medium text-fg">Admin</dt>{' '}
@@ -459,185 +459,13 @@ export function PolicyPanel({ owner }: { owner: string }) {
       )}
 
       <fieldset disabled={!has('org_policies')} className="space-y-4">
-        <legend className="mb-2 text-sm font-medium">Merging</legend>
+        <legend className="mb-2 text-sm font-medium">Branches and sharing</legend>
         <ListField
-          label="Required checks"
-          hint="Check names (erc, drc, bom, ...) that must pass before any pull request is merged."
-          value={p.requiredChecks}
-          onChange={(v) => set('requiredChecks', v)}
-          placeholder={'erc\ndrc'}
-        />
-        <FormField label="Minimum approvals" hint="Floor for every pull request.">
-          {(id) => (
-            <Input
-              id={id}
-              type="number"
-              min={0}
-              max={10}
-              value={p.minApprovals}
-              onChange={(e) => set('minApprovals', Number(e.target.value))}
-              className="w-24"
-            />
-          )}
-        </FormField>
-        <div>
-          <p className="mb-1 text-sm font-medium">Sign-off rules</p>
-          <p className="mb-2 text-xs text-fg-muted">
-            When a changed file matches the pattern, the named people must approve.
-          </p>
-          {p.signoffRules.map((r, i) => (
-            <div
-              key={i}
-              className="mb-2 grid gap-2 rounded-md border border-border p-3 sm:grid-cols-[1fr_1fr_5rem_auto]"
-            >
-              <Input
-                value={r.name}
-                onChange={(e) =>
-                  set(
-                    'signoffRules',
-                    p.signoffRules.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)),
-                  )
-                }
-                placeholder="Power review"
-                aria-label="Rule name"
-              />
-              <Input
-                value={r.pathPattern}
-                onChange={(e) =>
-                  set(
-                    'signoffRules',
-                    p.signoffRules.map((x, j) =>
-                      j === i ? { ...x, pathPattern: e.target.value } : x,
-                    ),
-                  )
-                }
-                placeholder="power/**"
-                aria-label="Path pattern"
-                className="font-mono text-[13px]"
-              />
-              <Input
-                type="number"
-                min={1}
-                max={10}
-                value={r.requiredApprovals}
-                onChange={(e) =>
-                  set(
-                    'signoffRules',
-                    p.signoffRules.map((x, j) =>
-                      j === i ? { ...x, requiredApprovals: Number(e.target.value) } : x,
-                    ),
-                  )
-                }
-                aria-label="Approvals needed"
-              />
-              <IconButton
-                label="Remove rule"
-                icon={<Trash2 size={14} />}
-                onClick={() =>
-                  set(
-                    'signoffRules',
-                    p.signoffRules.filter((_, j) => j !== i),
-                  )
-                }
-              />
-              <Input
-                className="sm:col-span-4"
-                value={r.approvers.join(', ')}
-                onChange={(e) =>
-                  set(
-                    'signoffRules',
-                    p.signoffRules.map((x, j) =>
-                      j === i ? { ...x, approvers: lines(e.target.value) } : x,
-                    ),
-                  )
-                }
-                placeholder="Approvers: usernames, comma separated"
-                aria-label="Approvers"
-              />
-            </div>
-          ))}
-          <Button
-            size="sm"
-            leadingIcon={<Plus size={14} />}
-            onClick={() =>
-              set('signoffRules', [
-                ...p.signoffRules,
-                { name: '', pathPattern: '', requiredApprovals: 1, approvers: [] },
-              ])
-            }
-          >
-            Add rule
-          </Button>
-        </div>
-      </fieldset>
-
-      <fieldset disabled={!has('org_policies')} className="space-y-4">
-        <legend className="mb-2 text-sm font-medium">Parts</legend>
-        <ListField
-          label="Approved manufacturers"
-          hint="When set, parts from other manufacturers are flagged in the BOM check."
-          value={p.partPolicy.approvedManufacturers}
-          onChange={(v) => set('partPolicy', { ...p.partPolicy, approvedManufacturers: v })}
-        />
-        <ListField
-          label="Banned parts"
-          hint="MPN patterns, one per line (* matches anything)."
-          value={p.partPolicy.bannedParts.map((x) => x.pattern)}
-          onChange={(v) =>
-            set('partPolicy', {
-              ...p.partPolicy,
-              bannedParts: v.map((pattern) => ({
-                pattern,
-                reason: p.partPolicy.bannedParts.find((x) => x.pattern === pattern)?.reason ?? '',
-              })),
-            })
-          }
-        />
-        <ListField
-          label="Banned footprints"
-          hint="Footprint patterns, e.g. *0201*."
-          value={p.partPolicy.bannedFootprints.map((x) => x.pattern)}
-          onChange={(v) =>
-            set('partPolicy', {
-              ...p.partPolicy,
-              bannedFootprints: v.map((pattern) => ({
-                pattern,
-                reason:
-                  p.partPolicy.bannedFootprints.find((x) => x.pattern === pattern)?.reason ?? '',
-              })),
-            })
-          }
-        />
-      </fieldset>
-
-      <fieldset disabled={!has('org_policies')} className="space-y-4">
-        <legend className="mb-2 text-sm font-medium">Releases and sharing</legend>
-        <ListField
-          label="Release branches"
-          hint="No deletion, force-push or direct push, for admins too. Patterns such as release/* work."
+          label="Protected branches"
+          hint="No deletion or force-push in any repository, for admins too. Patterns such as release/* work."
           value={p.releaseBranches}
           onChange={(v) => set('releaseBranches', v)}
         />
-        <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
-          <ListField
-            label="Release approvers"
-            hint="People who must approve before a release is published."
-            value={p.releaseApprovers}
-            onChange={(v) => set('releaseApprovers', v)}
-          />
-          <FormField label="Approvals needed">
-            {(id) => (
-              <Input
-                id={id}
-                type="number"
-                min={0}
-                max={10}
-                value={p.releaseApprovals}
-                onChange={(e) => set('releaseApprovals', Number(e.target.value))}
-              />
-            )}
-          </FormField>
-        </div>
         <Checkbox
           checked={p.requireWatermark}
           onChange={(e) => set('requireWatermark', e.target.checked)}
@@ -1082,7 +910,7 @@ export function AuditPanel({ owner }: { owner: string }) {
         }
       >
         Who changed what in this organization and its repositories: access, settings, policies,
-        merges, releases and sign-ins. Export needs Business.
+        pushes and sign-ins. Export needs Business.
       </SectionTitle>
       <div className="mb-3 flex flex-wrap gap-2">
         <Input

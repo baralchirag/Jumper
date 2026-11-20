@@ -109,25 +109,6 @@ describe.skipIf(!dbAvailable)('branch protection (real git pushes over HTTP)', (
     expect(res.err).toContain('cannot be force-pushed');
   });
 
-  it('require-pull-request blocks direct pushes but not merges through a pull request', async () => {
-    await alice.post('/api/repos/alice/board/branch-protection', { pattern: 'main', requirePullRequest: true });
-    await freshClone(bobTok, 'bob');
-    await git('checkout', '-q', '-b', 'feature');
-    await commit('f.txt', 'feature work');
-    // No worker runs in tests, so do not require checks that can never report.
-    await commit('.jumper.yml', 'required_checks: []\n');
-    expect((await push(bobTok, 'bob', 'feature')).ok).toBe(true);
-    await git('checkout', '-q', 'main');
-    await commit('direct.txt', 'sneaky');
-    const direct = await push(bobTok, 'bob', 'main');
-    expect(direct.ok).toBe(false);
-    expect(direct.err).toContain('open a pull request');
-    const pr = await bob.post('/api/repos/alice/board/pulls', { title: 'Feature', base: 'main', head: 'feature' });
-    expect(pr.status).toBe(200);
-    const merged = await alice.post(`/api/repos/alice/board/pulls/${pr.json.number}/merge`, { method: 'merge' });
-    expect(merged.status, merged.body).toBe(200);
-  });
-
   it('the API refuses to delete a protected branch and hides nothing from readers', async () => {
     await freshClone(aliceTok, 'alice');
     await git('checkout', '-q', '-b', 'release/1');

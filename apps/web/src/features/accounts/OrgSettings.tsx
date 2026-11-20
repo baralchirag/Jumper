@@ -105,9 +105,6 @@ export function OrgSettingsPage() {
               {s.label}
             </Link>
           ))}
-          <Link to="/organizations/$org/insights" params={{ org: ns.slug }} className="-mb-px ml-auto shrink-0 whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-[13px] text-fg-muted no-underline hover:text-fg">
-            Insights →
-          </Link>
         </nav>
       )}
       {error && <Flash tone="danger" className="mb-6">{error}</Flash>}
@@ -212,7 +209,7 @@ export function OrgSettingsPage() {
             <div className="flex flex-wrap items-center gap-4 p-5">
               <div className="min-w-0 flex-1">
                 <div className="font-medium">Delete this organization</div>
-                <p className="text-sm text-fg-muted">Permanently deletes {ns.repos.length} repositor{ns.repos.length === 1 ? 'y' : 'ies'} with all history, pull requests and files. This cannot be undone.</p>
+                <p className="text-sm text-fg-muted">Permanently deletes {ns.repos.length} repositor{ns.repos.length === 1 ? 'y' : 'ies'} with all history, checks and files. This cannot be undone.</p>
               </div>
               <Button variant="danger" onClick={() => setDel(true)}>Delete organization…</Button>
             </div>

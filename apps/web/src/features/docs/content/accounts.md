@@ -1,4 +1,4 @@
-# Accounts, organizations & forks
+# Accounts & organizations
 
 ## Your account
 
@@ -18,8 +18,8 @@ Settings → Account → **Download export** gives you a JSON file with your pro
 
 Settings → Account → **Delete my account…** shows exactly what will be removed before you confirm with your username and password.
 
-* **Deleted for good:** your profile, sessions, access tokens, stars, and every repository you own, with its git history, pull requests, checks and stored files.
-* **Kept:** what you wrote on other people's repositories (issues, comments, reviews, merged pull requests) so conversations still make sense. They are shown as written by **ghost**.
+* **Deleted for good:** your profile, sessions, access tokens and every repository you own, with its git history, checks and stored files. Repositories you connected from GitHub are only removed from Jumper; GitHub is never touched.
+* **Removed:** your access to other people's repositories and organizations.
 * **Blocked until you act:** if you are the only owner of an organization, add another owner or delete the organization first. If you are the only administrator of the instance, make someone else an administrator.
 * Your username becomes available again.
 
@@ -27,25 +27,12 @@ This cannot be undone and cannot be done with an API token.
 
 ## Organizations
 
-Create one from the **+** menu. An organization owns repositories under its own name (`acme/board`).
+Create one from the **+** menu. An organization owns repositories under its own name (`acme/board`) and has one plan and one bill for the team. On the hosted service, organizations come with a paid plan: Pro for small teams, Business for companies (see [Pricing](/pricing)).
 
 * **Owners** manage everything: members and roles, the profile, deletion.
 * **Members** can push to the organization's repositories.
 
 Open the organization and choose **Settings** to add people by username, change roles, remove members or leave. An organization always keeps at least one owner. **Delete organization** removes all of its repositories permanently and needs you to type its name.
-
-## Forks
-
-**Fork** (top right of any repository) copies the repository, with all branches and tags, into your account or an organization you belong to. The copy is independent: pushes to your fork never touch the original. Open a pull request from your fork's branch to send changes back.
-
-* Forks of private repositories stay private and are only visible to people with access.
-* Issues, discussions, webhooks and settings are not copied; the code is.
-* If the original is deleted, your fork stays and simply stops saying "forked from".
-* An empty repository cannot be forked.
-
-## Following people
-
-Open someone's profile and choose **Follow**. Their profile shows how many people follow them and whom they follow; both lists open from the counts. The people you follow are listed on your Workbench. Unfollow from the same button.
 
 ## Inviting people to an organization
 

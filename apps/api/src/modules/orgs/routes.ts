@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { and, eq, namespaces, orgMembers, organizations, repositories, sql, users } from '@jumper/db';
 import { createOrgSchema, orgMemberSchema } from '@jumper/shared';
 import { requireScope, requireUser } from '../auth/plugin';
-import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
+import { HttpError, badRequest, conflict, forbidden, notFound } from '../../lib/errors';
 import { findNamespace, orgRoleFor } from '../repos/access';
 import { audit } from '../audit/audit';
 import { purgeRepoData } from '../repos/purge';
@@ -23,6 +23,13 @@ const orgRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post('/', { schema: { body: createOrgSchema } }, async (req) => {
     const user = requireUser(req);
     requireScope(req, 'admin');
+    // On the hosted service, organizations are for paying customers. Self-hosted instances (no plan limits) are unaffected.
+    if (ctx.env.PLANS_ENFORCED && !user.isAdmin) {
+      const own = (await ctx.db.select({ plan: namespaces.plan }).from(namespaces).where(eq(namespaces.userId, user.id)).limit(1))[0];
+      if (!own || own.plan === 'free') {
+        throw new HttpError(402, 'plan_required', 'Organizations are part of paid plans. Upgrade to Pro, or contact us to set up Business for your team.');
+      }
+    }
     if (await findNamespace(ctx, req.body.slug)) throw conflict('That name is taken');
     const org = await ctx.db.transaction(async (tx) => {
       const [org] = await tx.insert(organizations).values({ name: req.body.name, description: req.body.description }).returning();

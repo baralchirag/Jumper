@@ -4,8 +4,6 @@
 
 **Git keeps asking for my password, or says "Authentication failed".** Use your **username** and a **personal access token**, not your account password. The token needs the `repo:write` scope to push (`repo:read` is enough to clone a private repository). If you changed tokens, clear the old one from your credential helper. On macOS: `git credential-osxkeychain erase`. On Windows: Credential Manager → *Windows Credentials*.
 
-**`error: 'main' is protected: open a pull request instead of pushing directly.`** The branch has protection rules. Push to a new branch (`git push -u origin my-change`) and open a pull request. Repository admins can change the rules under **Settings → Branch protection**.
-
 **`error: 'main' is protected and cannot be force-pushed.`** Protected branches reject rewritten history. Revert the commit instead of resetting, or ask an admin to relax the rule.
 
 **`rejected … (fetch first)` or `non-fast-forward`.** Someone pushed before you, or the repository was created with a README. Run `git pull --rebase` and push again. For a brand-new repository you can also start over with an empty one.
@@ -47,15 +45,11 @@ Standard KiCad libraries (`Device`, `Resistor_SMD`, …) never need committing.
 
 **The Firmware tab says there is no netlist.** Make sure `netlist` under `outputs` in `.jumper.yml` is not set to `false`, then wait for the checks on that commit to finish.
 
-## Pull requests and review
+## Comparing and mirroring
 
-**I cannot merge: `Required check "DRC" failed` (or "is still running", "has not run").** Every check in `required_checks` must succeed on the pull request's latest commit. Fix the violations and push again; the pull request updates on its own. "Has not run" usually means the check is disabled in `.jumper.yml` but still required.
+**My GitHub repository stopped updating on Jumper.** Open the repository's **Settings → Mirroring**. The last error is shown there; the usual cause is an expired GitHub token. Paste a new one and choose **Sync now**.
 
-**I cannot merge: "locked by another user".** A colleague holds a whole-file lock on a file this pull request changes. Ask them to release it, or ask a repository admin to.
-
-**I cannot merge: a sign-off rule.** The blocker names the rule. Ask one of the listed approvers to approve, or ask an admin to adjust the rule under **Settings → Review process**.
-
-**Two people edited the same board and the merge conflicts.** KiCad files are text but are not safe to merge line by line. Lock the `.kicad_pcb` while you work on it (open the file in Jumper and use the **Lock** panel), or have one person rebase and redo the smaller change in KiCad.
+**Two people edited the same board and the branches conflict.** KiCad files are text but are not safe to merge line by line. Use **Compare** to see both changes on the board, then have one person redo the smaller change in KiCad on top of the other.
 
 ## Accounts and access
 
@@ -69,4 +63,4 @@ Standard KiCad libraries (`Device`, `Resistor_SMD`, …) never need committing.
 
 ## Still stuck?
 
-Open an issue on the repository with the failing check's log (**Checks → Details**), or contact the operator of your instance. Their address is on the [terms](/terms) page.
+Send the failing check's log (**Checks → Details**) to the operator of your instance. Their address is on the [terms](/terms) page.

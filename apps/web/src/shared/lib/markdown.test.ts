@@ -42,7 +42,7 @@ describe('renderMarkdown', () => {
     const d = dom(renderMarkdown('Thanks @ana, fixed in #12. `@notme #3` email a@b.co', { repo: { owner: 'o', name: 'r' } }));
     const links = [...d.querySelectorAll('a')].map((a) => a.getAttribute('href'));
     // The email is a GFM autolink, never a mention.
-    expect(links).toEqual(['/ana', '/o/r/pull/12', 'mailto:a@b.co']);
+    expect(links).toEqual(['/ana', 'mailto:a@b.co']);
     expect(d.querySelector('code')!.textContent).toBe('@notme #3');
   });
 

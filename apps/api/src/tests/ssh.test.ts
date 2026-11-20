@@ -129,16 +129,17 @@ describe.skipIf(!dbAvailable || !hasSsh)('git over SSH', () => {
     await addKey(alice, 'alice');
     await alice.put('/api/repos/alice/board/collaborators/bob', { role: 'write' });
     await addKey(bob, 'bob');
-    const rule = await alice.post('/api/repos/alice/board/branch-protection', { pattern: 'main', requirePullRequest: true, blockForcePush: true, blockDeletion: true });
+    const rule = await alice.post('/api/repos/alice/board/branch-protection', { pattern: 'main', blockForcePush: true, blockDeletion: true });
     expect(rule.status, rule.body).toBe(200);
     const url = `ssh://git@127.0.0.1:${ssh.port}/alice/board.git`;
     await git('bob', ['clone', url, 'p']);
     await writeFile(join(dir, 'p', 'y.txt'), 'y');
     await git('bob', ['add', '.'], join(dir, 'p'));
     await git('bob', ['commit', '-m', 'y'], join(dir, 'p'));
-    const res = await git('bob', ['push', 'origin', 'HEAD:main'], join(dir, 'p'));
-    expect(res.status).not.toBe(0);
-    expect((await git('bob', ['push', 'origin', 'HEAD:feature'], join(dir, 'p'))).status).toBe(0);
+    // Normal pushes go through; deleting or rewriting the protected branch does not.
+    expect((await git('bob', ['push', 'origin', 'HEAD:main'], join(dir, 'p'))).status).toBe(0);
+    expect((await git('bob', ['push', 'origin', '--delete', 'main'], join(dir, 'p'))).status).not.toBe(0);
+    expect((await git('bob', ['push', '--force', 'origin', 'HEAD~1:main'], join(dir, 'p'))).status).not.toBe(0);
   });
 
   it('answers git-lfs-authenticate with a credential scoped to one repository and operation', async () => {

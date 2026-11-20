@@ -1,19 +1,19 @@
 # Mirroring with GitHub and GitLab
 
-A mirror keeps a Jumper repository in step with a copy on GitHub, GitLab, Gitea or any host that serves git over HTTPS. Use it to try Jumper next to your current host, to keep a public copy where your community already is, or to move over gradually.
+A mirror keeps a Jumper repository in step with a copy on GitHub, GitLab, Gitea or any host that serves git over HTTPS. This is the usual way to use Jumper: keep working on GitHub, and let Jumper check, price and compare every commit.
 
 | Mirror | What it does | When it runs |
 | --- | --- | --- |
-| **Push** | Sends branches and tags from Jumper to the remote. | After every push, merge and web edit here. A failed attempt is retried on its interval. |
+| **Push** | Sends branches and tags from Jumper to the remote. | After every push here. A failed attempt is retried on its interval. |
 | **Pull** | Fetches branches and tags from the remote into Jumper. | On its interval (10 minutes to once a day), or when you press **Sync now**. |
 | **Push + pull** | A two-way mirror: work can happen on either side. | Both of the above. |
 
 ## Import and keep in sync
 
-On **+ → New repository → Import from a URL**, choose what happens after the import:
+On **+ → New repository → Connect from GitHub**, choose what happens after the import:
 
 - **Keep a one-time copy**: no mirror. The access token is used once and never stored.
-- **Keep pulling new commits**: a pull mirror.
+- **Keep pulling new commits** (the default): a pull mirror. Every new commit on GitHub is analyzed as soon as it is fetched.
 - **Two-way**: a pull mirror and a push mirror to the same repository. This needs a token that can write to it.
 
 ## Add a mirror later
@@ -39,4 +39,4 @@ Turn on **Overwrite** to make one side the source of truth:
 Access tokens are encrypted (AES-256-GCM) with the server's key and never sent back to the browser. Only repository admins can see or change mirrors. Every add, change and removal is in the security log. Remotes on private or internal networks are refused.
 
 > [!TIP]
-> Pull requests, issues and reviews are not mirrored. Only git data is: branches, tags and their history.
+> Only git data is mirrored: branches, tags and their history. Pull requests and issues stay on GitHub, where your team already works.

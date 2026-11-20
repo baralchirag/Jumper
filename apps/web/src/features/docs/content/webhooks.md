@@ -7,10 +7,7 @@ A webhook sends an HTTP `POST` to your server when something happens in a reposi
 | Event | Sent when |
 |---|---|
 | `push` | commits are pushed to any branch or tag |
-| `pull_request` | a pull request is opened, edited, commented, reviewed, updated or merged (`action` says which) |
 | `check` | a check finishes |
-| `issues` | an issue or discussion is opened, edited, closed or reopened |
-| `issue_comment` | someone comments on one |
 
 ## Request
 

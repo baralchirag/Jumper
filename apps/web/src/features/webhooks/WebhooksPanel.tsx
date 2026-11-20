@@ -9,10 +9,7 @@ import { useRepoInfo } from '../repo/context';
 
 const EVENT_HELP: Record<(typeof WEBHOOK_EVENTS)[number], string> = {
   push: 'Commits pushed to any branch',
-  pull_request: 'Pull requests opened, updated, reviewed or merged',
   check: 'A check (ERC, DRC, renders…) finished',
-  issues: 'Issues opened, edited, closed',
-  issue_comment: 'Comments on issues and discussions',
 };
 
 function Deliveries({ id }: { id: string }) {

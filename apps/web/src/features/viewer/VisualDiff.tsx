@@ -8,7 +8,7 @@ import { Button, Flash, Label, SegmentedControl, Spinner, cx } from '@jumper/ui'
 import { api, errorMessage, repoPath } from '../../shared/lib/api';
 import { loadDesign } from './kicad';
 import { keys } from '../../shared/lib/queries';
-import { CommentCard, CommentForm } from '../pulls/Comments';
+import { CommentCard, CommentForm } from '../diff/Comments';
 import { DesignViewer, type DesignSelection, type DesignViewerHandle } from './DesignViewer';
 
 export interface SemanticDiffResponse {

@@ -384,31 +384,6 @@ export interface ComplianceReport {
 
 // ---------- insights ----------
 
-export interface InsightsReport {
-  owner: string;
-  /** ISO dates of the Monday starting each of the weeks covered, oldest first. */
-  weeks: string[];
-  pulls: {
-    opened: number[];
-    merged: number[];
-    /** Median hours from opening to the first review, per week (null when nothing was reviewed). */
-    hoursToFirstReview: (number | null)[];
-    /** Median hours from opening to merge, per week. */
-    hoursToMerge: (number | null)[];
-    medianHoursToFirstReview: number | null;
-    medianHoursToMerge: number | null;
-  };
-  open: { repo: string; number: number; title: string; author: UserSummary; ageDays: number; approvals: number; draft: boolean; waitingForReview: boolean }[];
-  checks: {
-    /** Per check name: runs and failures per week. */
-    series: { name: string; runs: number[]; failures: number[] }[];
-    /** Repositories with the most failed runs in the period. */
-    worst: { repo: string; failures: number; runs: number }[];
-    failureRate: number | null;
-  };
-  reviewers: { user: UserSummary; reviews: number; approvals: number }[];
-}
-
 // ---------- templates ----------
 
 export interface RepoTemplateInfo {
@@ -452,36 +427,6 @@ export type RetentionSettings = z.output<typeof retentionSchema>;
 export const DEFAULT_RETENTION: RetentionSettings = retentionSchema.parse({});
 
 // ---------- release records ----------
-
-export interface ReleaseRecord {
-  /** Format version of this document. */
-  version: 1;
-  repository: string;
-  tag: string;
-  name: string;
-  sha: string;
-  createdBy: string | null;
-  createdAt: string;
-  publishedAt: string | null;
-  /** Check results on the released commit. */
-  checks: { name: string; project: string; conclusion: string | null; completedAt: string | null }[];
-  /** Pull requests merged since the previous release, with who approved each. */
-  changes: { number: number; title: string; author: string; mergedBy: string | null; mergedAt: string | null; approvedBy: string[] }[];
-  /** Release sign-offs, in order. */
-  signoffs: { user: string; name: string | null; decision: 'approved' | 'rejected'; comment: string; sha: string; at: string }[];
-  required: { approvals: number; approvers: string[] };
-  files: { name: string; kind: string; size: number; sha256: string | null }[];
-  /** sha256 of the record before it; chains the records of a repository so a removed or edited record is detectable. */
-  previousDigest: string | null;
-}
-
-export interface SignedReleaseRecord {
-  record: ReleaseRecord;
-  /** sha256 over the canonical JSON of `record`. */
-  digest: string;
-  /** HMAC of the digest with the instance's secret, proving the record came from this instance. */
-  signature: string;
-}
 
 // ---------- version ----------
 

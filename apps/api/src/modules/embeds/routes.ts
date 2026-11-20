@@ -6,7 +6,7 @@
 // Public repositories work anywhere (GitHub, docs sites). Private ones only for signed-in viewers on Jumper itself.
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { and, artifacts, checkRuns, desc, eq, inArray, releases } from '@jumper/db';
+import { and, artifacts, checkRuns, eq, inArray } from '@jumper/db';
 import { CHECK_NAMES } from '@jumper/shared';
 import { notFound } from '../../lib/errors';
 import { gitFor, loadRepo } from '../repos/access';
@@ -85,24 +85,6 @@ const embedRoutes: FastifyPluginAsyncZod = async (app) => {
         .send(badgeSvg(label, state.message, state.tone));
     },
   );
-
-  app.get('/repos/:owner/:repo/badge/release.svg', { schema: { params } }, async (req, reply) => {
-    const r = await loadRepo(req, req.params.owner, req.params.repo);
-    markPublic(req, r.repo.visibility);
-    const latest = (
-      await ctx.db
-        .select({ tag: releases.tag })
-        .from(releases)
-        .where(and(eq(releases.repoId, r.repo.id), eq(releases.draft, false), eq(releases.prerelease, false)))
-        .orderBy(desc(releases.publishedAt))
-        .limit(1)
-    )[0];
-    return reply
-      .type('image/svg+xml; charset=utf-8')
-      .header('Cache-Control', r.repo.visibility === 'public' ? 'public, max-age=300' : 'private, no-cache')
-      .header('X-Content-Type-Options', 'nosniff')
-      .send(badgeSvg('release', latest?.tag ?? 'none', latest ? 'info' : 'neutral'));
-  });
 
   /** The board as of the branch's latest analysed commit. `.png` and `.svg` are the same endpoint; the type follows the image. */
   for (const path of ['/repos/:owner/:repo/preview', '/repos/:owner/:repo/preview.png', '/repos/:owner/:repo/preview.svg']) {

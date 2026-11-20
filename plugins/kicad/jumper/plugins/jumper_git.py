@@ -57,11 +57,11 @@ def _friendly(stderr):
         return "Someone else pushed changes first. Pull, check the result in KiCad, then push again."
     if "not possible to fast-forward" in s or "diverging branches" in s or "have diverged" in s:
         return ("Your copy and Jumper both have new commits. Open a terminal in the project folder and run "
-                "'git pull --rebase', or push your work to a new branch and open a pull request.")
+                "'git pull --rebase', or push your work to a new branch and compare it on Jumper.")
     if "would be overwritten" in s or "local changes" in s:
         return "You have unsaved or uncommitted changes that the pull would overwrite. Commit them first."
     if "protected branch" in s or "requires a pull request" in s:
-        return "This branch is protected. Push to a new branch and open a pull request on Jumper."
+        return "This branch is protected. Push to a new branch instead."
     if "nothing to commit" in s:
         return "Nothing to commit: all changes are already saved in git."
     lines = [l for l in stderr.strip().splitlines() if l.strip()]

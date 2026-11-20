@@ -34,21 +34,19 @@ describe.skipIf(!dbAvailable)('search', () => {
       await h.ctx.storage.put(key, Buffer.from(body), 'application/json');
       await h.ctx.db.insert(artifacts).values({ repoId: pub.id, sha, projectPath: 'hw/usb-hub.kicad_pro', kind, name, storageKey: key, contentType: 'application/json', size: body.length });
     }
-    await alice.post('/api/repos/alice/usb-hub/issues', { title: 'TPS2051 gets hot at 2 A', body: 'Thermal relief on the pad?' });
     const priv = await h.repo(alice, 'secret-usb', { visibility: 'private' });
     await commitFiles(priv.git, { 'notes.txt': 'TPS2051 is used here too' });
-    await alice.post('/api/repos/alice/secret-usb/issues', { title: 'TPS2051 private issue' });
     return { sha };
   }
 
-  it('finds repositories, files, code, parts, nets and issues', async () => {
+  it('finds repositories, files, code, parts and nets', async () => {
     const { sha } = await setup();
     const repos = await bob.get('/api/search?q=usb&type=repos');
     expect(repos.json.hits.map((x: { repo: { name: string } }) => x.repo.name)).toEqual(['usb-hub']);
 
     const parts = await bob.get('/api/search?q=TPS2051&type=parts');
     expect(parts.json.hits).toEqual([expect.objectContaining({ type: 'parts', refs: ['U2', 'U3'], mpn: 'TPS2051BDBVR', quantity: 2, ref: sha })]);
-    expect(parts.json.counts).toMatchObject({ parts: 1, issues: 1, code: 2 });
+    expect(parts.json.counts).toMatchObject({ parts: 1, code: 2 });
 
     const nets = await bob.get('/api/search?q=usb_d&type=nets');
     expect(nets.json.hits).toEqual([expect.objectContaining({ net: '/USB_D+', pads: 1 })]);
@@ -57,20 +55,18 @@ describe.skipIf(!dbAvailable)('search', () => {
     expect(files.json.hits.map((x: { path: string }) => x.path)).toEqual(['hw/usb-hub.kicad_sch']);
     const code = await bob.get('/api/repos/alice/usb-hub/search?q=power switches&type=code');
     expect(code.json.hits).toEqual([expect.objectContaining({ path: 'README.md', line: 1 })]);
-    const issues = await bob.get('/api/search?q=hot&type=issues');
-    expect(issues.json.hits).toEqual([expect.objectContaining({ title: 'TPS2051 gets hot at 2 A', number: 1, state: 'open' })]);
   });
 
   it('never shows private repositories to people without access', async () => {
     await setup();
-    for (const type of ['repos', 'code', 'issues', 'files']) {
+    for (const type of ['repos', 'code', 'files']) {
       const res = await bob.get(`/api/search?q=${type === 'files' ? 'notes' : 'TPS2051'}&type=${type}`);
       expect(JSON.stringify(res.json.hits)).not.toContain('secret-usb');
       const anon = await h.anon.get(`/api/search?q=TPS2051&type=${type}`);
       expect(JSON.stringify(anon.json.hits)).not.toContain('secret-usb');
     }
-    const own = await alice.get('/api/search?q=TPS2051&type=issues');
-    expect(own.json.hits.map((x: { repo: { name: string } }) => x.repo.name).sort()).toEqual(['secret-usb', 'usb-hub']);
+    const own = await alice.get('/api/search?q=TPS2051&type=code');
+    expect(own.json.hits.map((x: { repo: { name: string } }) => x.repo.name)).toContain('secret-usb');
     expect((await bob.get('/api/repos/alice/secret-usb/search?q=TPS')).status).toBe(404);
   });
 

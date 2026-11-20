@@ -31,7 +31,6 @@ From then on, matching files are uploaded to LFS when you push and downloaded wh
 - LFS files count towards your plan's storage, next to repositories and generated outputs. See [Settings → Usage and plan](/settings/usage).
 - When a push would exceed the storage in your plan, the upload is refused before anything is sent, with a message saying so.
 
-Forks can read the LFS files of the repository they were forked from, so forking does not copy them.
 
 ## Permissions
 

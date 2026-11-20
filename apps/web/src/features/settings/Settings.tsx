@@ -707,11 +707,9 @@ function SsoIdentitiesPanel() {
 function NotificationsSection() {
   const qc = useQueryClient();
   const { data: me } = useMe();
-  const [preview, setPreview] = useState(false);
   const [msg, setMsg] = useMessage();
-  const p = useQuery({ queryKey: ['digest-preview'], queryFn: () => api.get<{ empty: boolean; subject: string; text: string; lastSentAt: string | null }>('/user/digest/preview'), enabled: preview });
   if (!me) return null;
-  const set = async (patch: { notifyEmail?: boolean; digestEmail?: boolean }) => {
+  const set = async (patch: { notifyEmail?: boolean }) => {
     try {
       const next = await api.patch<CurrentUser>('/user', patch);
       qc.setQueryData(keys.me, next);
@@ -723,32 +721,10 @@ function NotificationsSection() {
   return (
     <>
       <Panel title="Email" description={<>Emails go to <span className="font-mono">{me.email}</span>. Your inbox on this site always gets everything.</>} action={msg && <span className={cx('text-xs', msg.tone === 'success' ? 'text-success' : 'text-danger')}>{msg.text}</span>}>
-        <Row label="Mentions and assignments" hint="When someone mentions you, assigns you, requests your review, or a watched part runs out.">
+        <Row label="Part alerts" hint="When a part on a board you watch runs out of stock, cannot cover a build, or is being discontinued.">
           <Checkbox checked={me.notifyEmail} onChange={(e) => void set({ notifyEmail: e.target.checked })} label="Email me" />
         </Row>
-        <Row label="Weekly digest" hint="One email a week about the repositories you own, belong to, collaborate on or follow: merges, releases, failed checks, parts problems and reviews waiting on you. Nothing is sent in a quiet week.">
-          <Checkbox checked={me.digestEmail} onChange={(e) => void set({ digestEmail: e.target.checked })} label="Send me the weekly digest" />
-          <button type="button" className="link mt-2 text-xs" onClick={() => setPreview((v) => !v)}>
-            {preview ? 'Hide preview' : 'Preview this week’s digest'}
-          </button>
-        </Row>
       </Panel>
-      {preview && (
-        <Panel title="This week’s digest" description={p.data?.lastSentAt ? <>Last sent <RelativeTime date={p.data.lastSentAt} />.</> : 'Not sent yet.'}>
-          {p.isLoading ? (
-            <PageSpinner />
-          ) : p.data?.empty ? (
-            <p className="py-4 text-[13px] text-fg-muted">Nothing happened in the last seven days, so no digest would be sent.</p>
-          ) : (
-            p.data && (
-              <div className="rounded-md border border-border">
-                <p className="border-b border-border px-4 py-2 text-[13px] font-medium">{p.data.subject}</p>
-                <pre className="max-h-96 overflow-auto whitespace-pre-wrap px-4 py-3 font-mono text-xs leading-relaxed text-fg-muted">{p.data.text}</pre>
-              </div>
-            )
-          )}
-        </Panel>
-      )}
     </>
   );
 }
@@ -858,7 +834,7 @@ function SessionsSection() {
 
 const SCOPE_HINT: Record<string, string> = {
   'repo:read': 'Clone, fetch and read repositories through the API',
-  'repo:write': 'Push, open, review and merge pull requests',
+  'repo:write': 'Push and change repository settings',
   admin: 'Manage repository settings, collaborators and organizations',
 };
 
@@ -1050,8 +1026,6 @@ function RepositoriesSection() {
               <tr className="border-b border-border-muted text-left text-xs text-fg-subtle">
                 <th className="py-2 pr-4 font-normal">Name</th>
                 <th className="py-2 pr-4 font-normal">Access</th>
-                <th className="py-2 pr-4 text-right font-normal">Stars</th>
-                <th className="py-2 pr-4 text-right font-normal">Open PRs</th>
                 <th className="py-2 pr-4 font-normal">Pushed</th>
                 <th className="py-2" />
               </tr>
@@ -1067,8 +1041,6 @@ function RepositoriesSection() {
                     {r.visibility === 'private' && <Lock size={11} className="ml-1.5 inline text-fg-subtle" aria-label="Private" />}
                   </td>
                   <td className="py-2.5 pr-4 text-xs text-fg-muted">{r.owner.toLowerCase() === me?.username.toLowerCase() ? 'owner' : r.permission}</td>
-                  <td className="py-2.5 pr-4 text-right font-mono text-xs tabular-nums">{r.starCount}</td>
-                  <td className="py-2.5 pr-4 text-right font-mono text-xs tabular-nums">{r.openPullCount}</td>
                   <td className="py-2.5 pr-4 text-xs text-fg-muted">{r.pushedAt ? <RelativeTime date={r.pushedAt} /> : 'Never'}</td>
                   <td className="py-2.5 text-right">
                     {r.permission === 'admin' && (

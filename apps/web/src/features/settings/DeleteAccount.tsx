@@ -53,7 +53,7 @@ export function DeleteAccount() {
     <>
       <div className="flex flex-wrap items-center gap-4">
         <p className="min-w-0 flex-1 text-[14px] text-fg-muted">
-          Permanently delete your account and everything you own. Things you wrote on other people’s repositories (issues, comments, reviews) stay, shown as “ghost”.
+          Permanently delete your account and everything you own. Your access to other people’s repositories and organizations is removed.
         </p>
         <Button variant="danger" onClick={() => setOpen(true)}>
           Delete my account…
@@ -94,7 +94,7 @@ export function DeleteAccount() {
               <ul className="list-disc space-y-1 pl-5 text-fg-muted">
                 <li>your profile, sessions, access tokens and stars</li>
                 <li>
-                  {p.ownedRepos.length === 0 ? 'no repositories (you own none)' : `${p.ownedRepos.length} repositor${p.ownedRepos.length === 1 ? 'y' : 'ies'} with all git history, pull requests, checks and files`}
+                  {p.ownedRepos.length === 0 ? 'no repositories (you own none)' : `${p.ownedRepos.length} repositor${p.ownedRepos.length === 1 ? 'y' : 'ies'} with all git history, checks and files`}
                   {p.ownedRepos.length > 0 && <span className="block font-mono text-xs">{p.ownedRepos.slice(0, 8).map((r) => r.name).join(', ')}{p.ownedRepos.length > 8 ? ` and ${p.ownedRepos.length - 8} more` : ''}</span>}
                 </li>
               </ul>

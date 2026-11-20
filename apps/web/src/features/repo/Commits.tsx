@@ -5,7 +5,7 @@ import type { CommitDetail, CommitInfo } from '@jumper/shared';
 import { isDesignFile } from '@jumper/shared';
 import { Avatar, Box, BoxHeader, BoxRow, Button, CopyButton, PageSpinner, RelativeTime, buttonClass } from '@jumper/ui';
 import { CheckIcon, rollup } from '../checks/CheckStatus';
-import { FilesChanged } from '../pulls/FilesChanged';
+import { FilesChanged } from '../diff/FilesChanged';
 import { RefPicker } from '../../shared/components/RefPicker';
 import { ErrorView, shortSha } from '../../shared/components/common';
 import { api, repoPath } from '../../shared/lib/api';

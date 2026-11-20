@@ -1,11 +1,9 @@
 import { useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
 import type { SiteInfo } from '@jumper/shared';
 import { Flash, PageSpinner, cx } from '@jumper/ui';
 import { Markdown } from '../../shared/components/Markdown';
 import { PageContainer } from '../../shared/components/common';
-import { api } from '../../shared/lib/api';
 import { useMe } from '../../shared/lib/queries';
 import privacy from './content/privacy.md?raw';
 import refunds from './content/refunds.md?raw';
@@ -19,9 +17,9 @@ const DOCS: { id: LegalDoc; title: string; source: string }[] = [
   { id: 'refunds', title: 'Refund policy', source: refunds },
 ];
 
-export function useSite() {
-  return useQuery({ queryKey: ['site'], queryFn: () => api.get<SiteInfo>('/site'), staleTime: Infinity });
-}
+import { useSite } from '../../shared/lib/queries';
+
+export { useSite };
 
 /** Fill the operator's details into a policy. Unset values read naturally instead of leaving a placeholder. */
 export function fillLegal(source: string, site: SiteInfo | undefined): string {
