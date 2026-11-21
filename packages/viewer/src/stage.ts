@@ -164,6 +164,11 @@ export class Stage {
     this.emitView();
   }
 
+  /** Change the canvas colour (diff views draw on paper or graphite instead of KiCad's navy). */
+  setBackground(color: number): void {
+    this.app.renderer.background.color = color;
+  }
+
   setMarkers(markers: Marker[]): void {
     this.markers = markers;
     this.redrawOverlay();
@@ -173,13 +178,16 @@ export class Stage {
     if (!this.suppressEmit) this.opts.onViewChange?.(this.getView());
   }
 
+  /** Per-drawing marker colours (the vivid board selects in cyan, its changes in its own palette). */
+  markerColors: Partial<Record<MarkerKind, number>> = {};
+
   /** Markers are drawn in screen space so they stay legible at any zoom. */
   redrawOverlay(): void {
     if (this.destroyed) return;
     const g = this.overlay;
     g.clear();
     for (const m of this.markers) {
-      const color = MARKER_COLORS[m.kind];
+      const color = this.markerColors[m.kind] ?? MARKER_COLORS[m.kind];
       if (m.bbox) {
         const a = this.worldToScreen({ x: m.bbox.minX, y: m.bbox.minY });
         const b = this.worldToScreen({ x: m.bbox.maxX, y: m.bbox.maxY });

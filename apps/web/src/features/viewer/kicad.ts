@@ -1,14 +1,15 @@
-import type { KindHint, ParsedDesign } from '@jumper/kicad-core/types';
+import type { DiffResult, KindHint, ParsedDesign } from '@jumper/kicad-core/types';
 import { fetchRaw } from '../../shared/lib/api';
 
 let worker: Worker | null = null;
 let seq = 0;
-const pending = new Map<number, { resolve: (v: ParsedDesign) => void; reject: (e: Error) => void }>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
 
 function getWorker(): Worker {
   if (!worker) {
     worker = new Worker(new URL('./kicad.worker.ts', import.meta.url), { type: 'module' });
-    worker.onmessage = (e: MessageEvent<{ id: number; ok: boolean; result?: ParsedDesign; error?: string }>) => {
+    worker.onmessage = (e: MessageEvent<{ id: number; ok: boolean; result?: unknown; error?: string }>) => {
       const p = pending.get(e.data.id);
       if (!p) return;
       pending.delete(e.data.id);
@@ -30,6 +31,15 @@ export function parseDesign(text: string, kind: KindHint = 'auto'): Promise<Pars
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject });
     getWorker().postMessage({ id, text, kind });
+  });
+}
+
+/** Semantic diff of two revisions of one KiCad file, computed in the browser (the same core the server uses). */
+export function diffDesigns(before: string, after: string, kind: KindHint = 'auto'): Promise<DiffResult> {
+  const id = ++seq;
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    getWorker().postMessage({ id, op: 'diff', before, after, kind });
   });
 }
 

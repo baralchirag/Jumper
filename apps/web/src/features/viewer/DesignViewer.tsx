@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { FlipHorizontal2, Layers, Maximize, Maximize2, Search, ZoomIn, ZoomOut } from 'lucide-react';
 import type { BBox, ParsedDesign, Pt } from '@jumper/kicad-core/types';
-import { PcbViewer, SchematicViewer, type LayerInfo, type Marker, type PcbSelection, type SchSelection, type ViewState } from '@jumper/viewer';
+import { PcbViewer, SchematicViewer, type DiffPaint, type LayerInfo, type Marker, type PcbSelection, type SchSelection, type ViewState } from '@jumper/viewer';
 import { IconButton, Spinner, cx } from '@jumper/ui';
 import { fitHeight, useCoarsePointer, useFullscreen } from './layout';
 
@@ -13,12 +13,16 @@ export interface DesignViewerHandle {
   syncView(v: ViewState): void;
   getView(): ViewState | null;
   fit(): void;
+  /** Canvas pixel (relative to the canvas' top-left) to board millimetres. */
+  screenToWorld(x: number, y: number): Pt | null;
 }
 
 export interface DesignViewerProps {
   design: ParsedDesign;
   ghost?: ParsedDesign | null;
   monochrome?: number | null;
+  /** Review drawing for boards: the board in one quiet tone, changes in colour. */
+  diff?: DiffPaint | null;
   markers?: Marker[];
   height?: number | string;
   onSelect?: (sel: DesignSelection | null) => void;
@@ -42,7 +46,7 @@ const LAYER_PRESETS: Record<string, (l: LayerInfo) => boolean> = {
 };
 
 export const DesignViewer = forwardRef<DesignViewerHandle, DesignViewerProps>(function DesignViewer(props, ref) {
-  const { design, ghost, monochrome, markers, height = 600, toolbar, selectionAction, className, bare } = props;
+  const { design, ghost, monochrome, diff, markers, height = 600, toolbar, selectionAction, className, bare } = props;
   const host = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<AnyViewer | null>(null);
@@ -100,7 +104,7 @@ export const DesignViewer = forwardRef<DesignViewerHandle, DesignViewerProps>(fu
     if (!v) return;
     try {
       if (v instanceof PcbViewer && design.kind === 'pcb') {
-        v.load(design.model, { ghost: ghost?.kind === 'pcb' ? ghost.model : null, monochrome, keepView: loadedOnce.current });
+        v.load(design.model, { ghost: ghost?.kind === 'pcb' ? ghost.model : null, monochrome, diff, keepView: loadedOnce.current });
         setLayers(v.layers());
       } else if (v instanceof SchematicViewer && design.kind === 'schematic') {
         v.load(design.model, { ghost: ghost?.kind === 'schematic' ? ghost.model : null, monochrome, keepView: loadedOnce.current });
@@ -110,7 +114,7 @@ export const DesignViewer = forwardRef<DesignViewerHandle, DesignViewerProps>(fu
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [ready, design, ghost, monochrome]);
+  }, [ready, design, ghost, monochrome, diff]);
 
   useEffect(() => {
     ready?.setMarkers(markers ?? []);
@@ -124,6 +128,7 @@ export const DesignViewer = forwardRef<DesignViewerHandle, DesignViewerProps>(fu
       syncView: (v) => viewerRef.current?.stage.syncView(v),
       getView: () => viewerRef.current?.stage.getView() ?? null,
       fit: () => viewerRef.current?.fit(),
+      screenToWorld: (x, y) => viewerRef.current?.stage.screenToWorld(x, y) ?? null,
     }),
     [],
   );

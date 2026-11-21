@@ -39,3 +39,16 @@ export function watchSystemTheme(): () => void {
   mq.addEventListener('change', onChange);
   return () => mq.removeEventListener('change', onChange);
 }
+
+const resolved = (): 'light' | 'dark' => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+
+/** The theme actually on screen (system preference resolved), for canvases that draw their own colours. */
+export function useResolvedTheme(): 'light' | 'dark' {
+  const [theme, setTheme] = useState(resolved);
+  useEffect(() => {
+    const mo = new MutationObserver(() => setTheme(resolved()));
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => mo.disconnect();
+  }, []);
+  return theme;
+}
