@@ -8,6 +8,7 @@ import { Box, BoxHeader, Button, CopyButton, Dropdown, PageSpinner, RelativeTime
 import { CheckIcon, rollup } from '../checks/CheckStatus';
 import { Markdown } from '../../shared/components/Markdown';
 import { ProjectHero } from './ProjectHero';
+import { MissingFiles, useDesigns } from './MissingFiles';
 import { RefPicker } from '../../shared/components/RefPicker';
 import { Breadcrumbs, ErrorView, FileIcon, formatBytes, shortSha } from '../../shared/components/common';
 import { api, rawUrl, repoPath } from '../../shared/lib/api';
@@ -111,6 +112,7 @@ export function CodePage() {
     enabled: !info.isEmpty,
   });
   const checks = useChecks(info.owner, info.name, tree.data?.sha);
+  const designs = useDesigns(info.owner, info.name, info.isEmpty || path ? undefined : gitRef);
 
   if (info.isEmpty) return <FirstPush />;
   if (tree.isLoading) return <PageSpinner />;
@@ -134,6 +136,7 @@ export function CodePage() {
           </div>
         </div>
 
+        {isRoot && <MissingFiles designs={designs.data} runs={checks.data?.runs} />}
         {isRoot && <ProjectHero owner={info.owner} repo={info.name} gitRef={gitRef} sha={t.sha} runs={checks.data?.runs ?? []} />}
 
         <Box>

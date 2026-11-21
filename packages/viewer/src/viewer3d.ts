@@ -24,6 +24,7 @@ import {
   Scene,
   Vector2,
   SRGBColorSpace,
+  Quaternion,
   Vector3,
   WebGLRenderer,
   type Material,
@@ -146,7 +147,7 @@ export class Viewer3D {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.12;
     this.controls.screenSpacePanning = true;
-    this.controls.rotateSpeed = 0.9;
+    this.controls.rotateSpeed = 0.55;
     this.controls.zoomToCursor = true;
     this.controls.autoRotateSpeed = 1.5;
     // Any interaction stops the turntable.
@@ -361,15 +362,28 @@ export class Viewer3D {
     this.controls.autoRotate = on;
   }
 
-  /** Turn the board over (rotate 180° about the camera's up axis). */
+  /** Turn the board over: look at the other side from the mirrored angle. */
   flip(): void {
     const target = this.controls.target.clone();
     const offset = this.camera.position.clone().sub(target);
-    const axis = this.camera.up.clone().normalize();
-    offset.applyAxisAngle(axis, Math.PI);
+    const n = this.normal;
+    offset.sub(n.clone().multiplyScalar(2 * offset.dot(n)));
+    // Straight down onto the board: lean a hair so the board keeps its orientation on screen (see setView).
+    if (Math.abs(offset.clone().normalize().dot(n)) > 0.9999) offset.add(this.up.clone().multiplyScalar(offset.length() * (offset.dot(n) > 0 ? -1e-4 : 1e-4)));
     this.camera.position.copy(target.clone().add(offset));
     this.camera.lookAt(target);
     this.controls.update();
+  }
+
+  /**
+   * Orbit around the board's normal. OrbitControls reads the camera's up direction only once, when it is created, so
+   * it has to be told when that changes; otherwise dragging up or down tilts the board around the wrong axis.
+   */
+  private orbitAround(n: Vector3): void {
+    this.camera.up.copy(n);
+    const c = this.controls as unknown as { _quat: Quaternion; _quatInverse: Quaternion };
+    c._quat.setFromUnitVectors(n.clone().normalize(), new Vector3(0, 1, 0));
+    c._quatInverse.copy(c._quat).invert();
   }
 
   /** Toggle a named child of the model (e.g. "components"). */
@@ -470,7 +484,9 @@ export class Viewer3D {
     this.ortho = ortho;
     const target = this.controls.target.clone();
     const pos = this.camera.position.clone();
+    const up = this.camera.up.clone();
     this.camera = this.makeCamera(ortho);
+    this.camera.up.copy(up);
     this.camera.position.copy(pos);
     this.controls.object = this.camera;
     this.controls.target.copy(target);
@@ -480,16 +496,18 @@ export class Viewer3D {
   setView(view: View3D): void {
     const n = this.normal.clone();
     const side = new Vector3().crossVectors(this.up, n).normalize();
+    // Top and bottom lean a hair off straight-on: looking exactly along the orbit axis has no defined "up" on screen.
+    // The lean keeps the board's own up pointing up, and the bottom view mirrored left to right like KiCad's.
     const dirs: Record<View3D, Vector3> = {
-      top: n.clone(),
-      bottom: n.clone().negate(),
+      top: n.clone().add(this.up.clone().multiplyScalar(-1e-4)).normalize(),
+      bottom: n.clone().negate().add(this.up.clone().multiplyScalar(1e-4)).normalize(),
       front: this.up.clone().negate(),
       back: this.up.clone(),
       left: side.clone().negate(),
       right: side.clone(),
       iso: n.clone().multiplyScalar(1).add(this.up.clone().multiplyScalar(-0.9)).add(side.clone().multiplyScalar(0.6)).normalize(),
     };
-    this.camera.up.copy(view === 'top' || view === 'bottom' ? this.up : n);
+    this.orbitAround(n);
     this.fitCamera(dirs[view]);
   }
 
@@ -514,6 +532,9 @@ export class Viewer3D {
     }
     this.camera.updateProjectionMatrix();
     this.controls.target.copy(center);
+    // Keep the board in reach: no zooming through it or off into the distance.
+    this.controls.minDistance = radius * 0.08;
+    this.controls.maxDistance = radius * 12;
     this.controls.update();
   }
 

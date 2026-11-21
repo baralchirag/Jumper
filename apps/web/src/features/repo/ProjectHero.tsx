@@ -1,21 +1,16 @@
 import { Link } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRight, Box as BoxIcon, CircuitBoard, Cpu, Download, FolderDown, Package } from 'lucide-react';
 import { kicadFileKind } from '@jumper/shared';
 import { buttonClass, cx } from '@jumper/ui';
-import { api, repoPath } from '../../shared/lib/api';
 import { downloadUrl } from '../checks/outputs';
-import { keys } from '../../shared/lib/queries';
 import { useOutputs } from './Outputs';
+import { useDesigns } from './MissingFiles';
 import { CheckIcon, rollup } from '../checks/CheckStatus';
 import type { CheckRunInfo } from '@jumper/shared';
 
 /** Board preview and shortcuts at the top of a repository. */
 export function ProjectHero({ owner, repo, gitRef, sha, runs }: { owner: string; repo: string; gitRef: string; sha: string; runs: CheckRunInfo[] }) {
-  const designs = useQuery({
-    queryKey: [...keys.repo(owner, repo), 'designs', gitRef],
-    queryFn: () => api.get<string[]>(repoPath(owner, repo, '/designs'), { ref: gitRef }),
-  });
+  const designs = useDesigns(owner, repo, gitRef);
   const outputs = useOutputs(owner, repo, sha);
   const files = designs.data ?? [];
   const pcb = files.find((p) => kicadFileKind(p) === 'pcb');
@@ -27,14 +22,16 @@ export function ProjectHero({ owner, repo, gitRef, sha, runs }: { owner: string;
   const fab = arts.find((a) => a.kind === 'fab_package');
   const bom = arts.find((a) => a.kind === 'bom' && a.name.endsWith('.json'));
   const name = (pcb ?? sch)!.split('/').pop()!.replace(/\.kicad_(pcb|sch)$/, '');
-  const ext = (to: 'view' | '3d' | 'bom', path: string) => ({ to: '/$owner/$repo/blob/$ref/$' as const, params: { owner, repo, ref: gitRef, _splat: path }, search: { tab: to } });
+  const ext = (to: 'view' | 'bom', path: string) => ({ to: '/$owner/$repo/blob/$ref/$' as const, params: { owner, repo, ref: gitRef, _splat: path }, search: { tab: to } });
+  // 3D lives in one place: Outputs, where the quick preview, KiCad's model and the ray-traced images share one viewer.
+  const in3d = (path: string) => ({ to: '/$owner/$repo/outputs' as const, params: { owner, repo }, search: { sha, id: `3d:${path.replace(/\.kicad_pcb$/i, '')}` } });
 
   const tile =
     'probe group/tile flex items-center gap-2.5 border-b border-border px-4 py-3 text-[13px] font-medium no-underline transition-colors hover:bg-canvas-subtle hover:text-fg sm:[&:nth-child(odd)]:border-r';
   return (
     <div className="grid overflow-hidden rounded-lg border border-border bg-canvas md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
       <Link
-        {...(pcb ? ext('3d', pcb) : ext('view', sch!))}
+        {...(pcb ? in3d(pcb) : ext('view', sch!))}
         className={cx('group relative flex min-h-56 items-center justify-center overflow-hidden border-b border-border md:border-b-0 md:border-r', render ? 'bg-[#c9cbd6]' : 'bg-[#0b1510]')}
       >
         {!render && <div aria-hidden className="sheet-grid absolute inset-0 opacity-60" data-theme="dark" />}
@@ -76,7 +73,7 @@ export function ProjectHero({ owner, repo, gitRef, sha, runs }: { owner: string;
             </Link>
           )}
           {pcb && (
-            <Link {...ext('3d', pcb)} className={tile}>
+            <Link {...in3d(pcb)} className={tile}>
               <BoxIcon size={15} className="text-fg-subtle transition-colors group-hover/tile:text-accent" /> <span className="probe-shift">3D view</span>
             </Link>
           )}

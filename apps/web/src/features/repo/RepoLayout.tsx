@@ -20,6 +20,10 @@ export function RepoLayout() {
   const section =
     rest.startsWith('/compare') ? 'compare' : rest.startsWith('/checks') ? 'checks' : rest.startsWith('/outputs') ? 'outputs' : rest.startsWith('/parts') || rest.startsWith('/bom-alerts') ? 'parts' : rest.startsWith('/settings') ? 'settings' : 'code';
 
+  // Pages built around a big viewer get more width.
+  const wide = section === 'outputs' || rest.startsWith('/blob/');
+  const width = wide ? 'max-w-[1680px]' : undefined;
+
   const items: NavItem[] = [
     {
       key: 'code',
@@ -94,7 +98,7 @@ export function RepoLayout() {
   return (
     <RepoContext.Provider value={info}>
       <div className="border-b border-border bg-canvas pt-8 md:pt-10">
-        <PageContainer>
+        <PageContainer className={width}>
           <div className="mb-6 flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
             <div className="min-w-0 flex-1 basis-72">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -118,7 +122,7 @@ export function RepoLayout() {
           <UnderlineNav items={items} className="-mx-3 border-b-0" />
         </PageContainer>
       </div>
-      <PageContainer className="py-8 md:py-12">
+      <PageContainer className={wide ? 'max-w-[1680px] py-6 md:py-8' : 'py-8 md:py-12'}>
         <Outlet />
       </PageContainer>
     </RepoContext.Provider>

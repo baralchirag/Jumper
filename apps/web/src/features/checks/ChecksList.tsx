@@ -17,6 +17,23 @@ const TITLES: Record<CheckName, string> = {
   Exports: 'Fabrication exports',
 };
 
+/** What a check that has not started yet is waiting for, in the reader's terms. */
+const QUEUED_NOTE: Record<CheckName, string> = {
+  ERC: 'In line. The schematic check starts as soon as the job ahead of it finishes.',
+  DRC: 'In line. The board check starts as soon as the job ahead of it finishes.',
+  BOM: 'In line. The parts list is built right after the checks ahead of it.',
+  Render: 'In line. Board images and the 3D view are made after the quick checks finish, usually within a minute or two.',
+  Exports: 'In line. Gerbers, PDFs and the 3D model are made after the quick checks finish, usually within a minute or two.',
+};
+
+const BUILDING_NOTE: Record<CheckName, string> = {
+  ERC: 'Checking the schematic now.',
+  DRC: 'Checking the board now.',
+  BOM: 'Building the parts list now.',
+  Render: 'Making the board images and 3D view now. This usually takes under a minute.',
+  Exports: 'Making Gerbers, PDFs and the 3D model now. This usually takes a minute or two.',
+};
+
 function duration(r: CheckRunInfo): string {
   if (!r.startedAt || !r.completedAt) return '';
   const s = (new Date(r.completedAt).getTime() - new Date(r.startedAt).getTime()) / 1000;
@@ -24,8 +41,8 @@ function duration(r: CheckRunInfo): string {
 }
 
 function stateLabel(r: CheckRunInfo): string {
-  if (r.status === 'queued') return 'Queued';
-  if (r.status === 'in_progress') return 'Running';
+  if (r.status === 'queued') return 'In line';
+  if (r.status === 'in_progress') return 'Building';
   switch (r.conclusion) {
     case 'success':
       return 'Passed';
@@ -309,7 +326,7 @@ function CheckDetail({ run, owner, repo }: { run: CheckRunInfo; owner: string; r
           {showLog && <pre className="mt-2 max-h-72 overflow-auto border border-border-muted bg-canvas-inset p-3 font-mono text-xs">{d.log}</pre>}
         </div>
       )}
-      {nothing && <p className="text-xs text-fg-muted">{run.status === 'completed' ? 'Nothing else to report.' : 'Waiting for the worker…'}</p>}
+      {nothing && <p className="text-xs text-fg-muted">{run.status === 'completed' ? 'Nothing else to report.' : run.status === 'queued' ? QUEUED_NOTE[run.name] : BUILDING_NOTE[run.name]}</p>}
     </div>
   );
 }
@@ -326,7 +343,7 @@ function CheckRow({ run, open, onToggle, owner, repo }: { run: CheckRunInfo; ope
         aria-expanded={open}
         className="grid w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-x-3 px-4 py-2.5 text-left transition-colors hover:bg-canvas-subtle sm:grid-cols-[1rem_9rem_minmax(0,1fr)_auto_3rem_1rem]"
       >
-        <CheckIcon state={st} size={15} />
+        <CheckIcon state={st} size={15} queued={run.status === 'queued'} />
         <span className="flex items-baseline gap-2 sm:block">
           <span className="font-mono text-[13px] font-medium">{run.name}</span>
           <span className="text-xs text-fg-muted sm:hidden">{stateLabel(run)}</span>
@@ -372,12 +389,13 @@ export function ChecksList({ owner, repo, sha, runs, canRerun }: { owner: string
   const state = rollup(runs);
   const failing = runs.filter((r) => runState(r) === 'failure').length;
   const passed = runs.filter((r) => runState(r) === 'success').length;
-  const pending = runs.filter((r) => runState(r) === 'pending').length;
+  const building = runs.filter((r) => r.status === 'in_progress').length;
+  const waiting = runs.filter((r) => r.status === 'queued').length;
   const headline =
     state === 'failure'
       ? `${failing} of ${runs.length} checks failing`
       : state === 'pending'
-        ? `${pending} of ${runs.length} checks running`
+        ? [building && `${building} building`, waiting && `${waiting} in line`].filter(Boolean).join(', ') + ` · ${runs.length - building - waiting} of ${runs.length} done`
         : state === 'success'
           ? `All ${runs.length} checks passed`
           : runs.length
@@ -413,7 +431,7 @@ export function ChecksList({ owner, repo, sha, runs, canRerun }: { owner: string
       {err && <p className="mb-3 text-xs text-danger">{err}</p>}
 
       {runs.length === 0 ? (
-        <p className="border-y border-border py-10 text-center text-[13px] text-fg-muted">Checks are queued when commits are pushed and appear here once the worker picks them up.</p>
+        <p className="border-y border-border py-10 text-center text-[13px] text-fg-muted">Checks start on their own after every push and show up here within a few seconds.</p>
       ) : (
         <div className="space-y-6">
           {projects.map((p) => (

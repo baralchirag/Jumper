@@ -8,13 +8,14 @@ import type { ArtifactInfo } from '@jumper/shared';
 import { Button, SegmentedControl, Select, Spinner, cx } from '@jumper/ui';
 import { fitHeight } from './layout';
 
-type Source = 'board' | 'glb' | 'step' | 'renders';
+export type Source3D = 'board' | 'glb' | 'step' | 'renders';
+type Source = Source3D;
 
 const SOURCE_LABEL: Record<Source, string> = {
   board: 'Live board',
-  glb: 'KiCad 3D (GLB)',
-  step: 'STEP · OpenCascade',
-  renders: 'Ray-traced',
+  glb: 'KiCad 3D',
+  step: 'STEP',
+  renders: 'Ray-traced images',
 };
 
 function RenderGallery({ renders }: { renders: ArtifactInfo[] }) {
@@ -51,6 +52,7 @@ export function Viewer3DPanel({
   height = 600,
   minimal = false,
   onReady,
+  initialSource,
 }: {
   pcb?: Pcb | null;
   glbUrl?: string | null;
@@ -61,13 +63,15 @@ export function Viewer3DPanel({
   minimal?: boolean;
   /** Called once the model is on screen. */
   onReady?: () => void;
+  /** Which view to open on, when it is available. */
+  initialSource?: Source;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const viewer = useRef<Viewer3D | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
   const available: Source[] = [...(glbUrl ? ['glb' as const] : []), ...(pcb ? ['board' as const] : []), ...(stepUrl ? ['step' as const] : []), ...(renders.length ? ['renders' as const] : [])];
-  const [source, setSource] = useState<Source>(available[0] ?? 'board');
+  const [source, setSource] = useState<Source>(initialSource && available.includes(initialSource) ? initialSource : (available[0] ?? 'board'));
   const [ortho, setOrtho] = useState(false);
   const [spin, setSpin] = useState(false);
   const [mask, setMask] = useState<MaskColor>('green');
@@ -197,13 +201,24 @@ export function Viewer3DPanel({
         )}
         {is3d && (
           <>
-            <span className="flex flex-wrap items-center">
+            <Select
+              defaultValue=""
+              onChange={(e) => {
+                if (e.target.value) viewer.current?.setView(e.target.value as View3D);
+                e.target.value = '';
+              }}
+              className="h-7 w-28 text-xs"
+              aria-label="Jump to a view"
+            >
+              <option value="" disabled>
+                View…
+              </option>
               {views.map((v) => (
-                <Button key={v} size="sm" variant="invisible" onClick={() => viewer.current?.setView(v)} className="capitalize">
-                  {v === 'iso' ? 'Iso' : v}
-                </Button>
+                <option key={v} value={v}>
+                  {v === 'iso' ? 'Angled' : v[0]!.toUpperCase() + v.slice(1)}
+                </option>
               ))}
-            </span>
+            </Select>
             <Button size="sm" variant="invisible" leadingIcon={<FlipVertical2 size={14} />} onClick={() => viewer.current?.flip()} title="Turn the board over">
               Flip
             </Button>
@@ -282,8 +297,8 @@ export function Viewer3DPanel({
           </div>
         )}
         {is3d && source === 'board' && state === 'ready' && !minimal && (
-          <div className="absolute right-3 top-3 rounded bg-black/50 px-2 py-1 text-xs text-white/90" title="Component bodies are approximated from courtyards. The KiCad 3D (GLB) source uses real 3D models once the Exports check finishes.">
-            Approximate parts · real models in KiCad 3D
+          <div className="absolute right-3 top-3 max-w-[60%] rounded bg-black/55 px-2 py-1 text-xs text-white/90" title="Built in your browser from the .kicad_pcb file. Part shapes are boxes drawn from the courtyards.">
+            {glbUrl ? 'Quick preview · switch to KiCad 3D for real part models' : 'Quick preview from your board file · real part models appear when the exports finish'}
           </div>
         )}
       </div>

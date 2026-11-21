@@ -1,4 +1,4 @@
-import { CircleCheck, CircleDot, CircleMinus, CircleX, Clock } from 'lucide-react';
+import { CircleCheck, CircleDot, CircleMinus, CircleX, Clock, Hourglass } from 'lucide-react';
 import type { CheckRunInfo } from '@jumper/shared';
 import { cx } from '@jumper/ui';
 
@@ -20,14 +20,16 @@ export function rollup(runs: CheckRunInfo[] | undefined): Rollup {
   return 'success';
 }
 
-export function CheckIcon({ state, size = 16, className }: { state: Rollup; size?: number; className?: string }) {
+/** `queued` shows a still hourglass instead of the pulsing clock: the job is waiting its turn, not running. */
+export function CheckIcon({ state, size = 16, className, queued }: { state: Rollup; size?: number; className?: string; queued?: boolean }) {
+  if (state === 'pending' && queued) return <Hourglass size={size} className={cx('text-fg-subtle', className)} aria-label="In line" />;
   switch (state) {
     case 'success':
       return <CircleCheck size={size} className={cx('text-success', className)} aria-label="Passed" />;
     case 'failure':
       return <CircleX size={size} className={cx('text-danger', className)} aria-label="Failed" />;
     case 'pending':
-      return <Clock size={size} className={cx('animate-pulse text-attention', className)} aria-label="Running" />;
+      return <Clock size={size} className={cx('animate-pulse text-attention', className)} aria-label="In progress" />;
     case 'neutral':
       return <CircleMinus size={size} className={cx('text-fg-subtle', className)} aria-label="Neutral" />;
     default:

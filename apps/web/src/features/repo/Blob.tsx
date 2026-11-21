@@ -1,5 +1,5 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, Navigate, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftRight, CircuitBoard, Code, Cpu, Download, Gauge, History, Image, Package, Rotate3d } from 'lucide-react';
 import type { BomLine } from '@jumper/kicad-core/types';
@@ -25,8 +25,6 @@ import { resolveRelative } from '../../shared/lib/markdown';
 import { keys, useChecks } from '../../shared/lib/queries';
 import { useRepoInfo } from './context';
 
-// three.js and OpenCascade are only loaded when the 3D tab is opened.
-const Viewer3DPanel = lazy(() => import('../viewer/Viewer3DPanel').then((m) => ({ default: m.Viewer3DPanel })));
 
 type Tab = 'view' | 'compare' | 'render' | '3d' | 'bom' | 'fab' | 'firmware' | 'source';
 
@@ -85,17 +83,6 @@ function InteractiveView({ owner, repo, sha, path, search }: { owner: string; re
       onOpenSheet={(file) => void navigate({ to: '/$owner/$repo/blob/$ref/$', params: { owner, repo, ref: sha, _splat: resolveRelative(dir, file) } })}
       toolbar={markers.length ? <span className="mr-2 text-xs text-danger">{markers.length} violation markers</span> : undefined}
     />
-  );
-}
-
-function Board3DView({ owner, repo, sha, path, glb, step, renders }: { owner: string; repo: string; sha: string; path: string; glb?: ArtifactInfo; step?: ArtifactInfo; renders: ArtifactInfo[] }) {
-  const design = useQuery({ queryKey: ['design', owner, repo, sha, path], queryFn: () => loadDesign(owner, repo, sha, path), staleTime: Infinity, retry: false });
-  if (design.isLoading && !glb && !step) return <PageSpinner label="Parsing board…" />;
-  const pcb = design.data?.kind === 'pcb' ? design.data.model : null;
-  return (
-    <Suspense fallback={<PageSpinner label="Loading 3D viewer…" />}>
-      <Viewer3DPanel key={sha} pcb={pcb} glbUrl={glb?.url} stepUrl={step?.url} renders={renders} height="calc(100vh - 260px)" />
-    </Suspense>
   );
 }
 
@@ -170,9 +157,6 @@ export function BlobPage() {
   if (blob.error) return <ErrorView error={blob.error} />;
   const b = blob.data!;
   const svgs = mine.filter((a) => a.kind === (kind === 'pcb' ? 'pcb_svg' : 'sch_svg'));
-  const glb = mine.find((a) => a.kind === 'glb');
-  const step = mine.find((a) => a.kind === 'step');
-  const renders3d = mine.filter((a) => a.kind === 'render3d');
   const raw = rawUrl(info.owner, info.name, b.sha, path);
   const isImage = /\.(png|jpe?g|gif|webp)$/i.test(path);
   const isMarkdown = /\.(md|markdown)$/i.test(path);
@@ -194,7 +178,7 @@ export function BlobPage() {
                 { value: 'view', label: 'Interactive', icon: <CircuitBoard size={12} /> },
                 { value: 'compare', label: 'Compare versions', icon: <ArrowLeftRight size={12} /> },
                 { value: 'render', label: 'KiCad render', icon: <Image size={12} />, disabled: !svgs.length },
-                ...(kind === 'pcb' ? [{ value: '3d' as Tab, label: '3D', icon: <Rotate3d size={12} /> }, { value: 'fab' as Tab, label: 'Fab check', icon: <Gauge size={12} /> }] : []),
+                ...(kind === 'pcb' ? [{ value: 'fab' as Tab, label: 'Fab check', icon: <Gauge size={12} /> }] : []),
                 ...(kind === 'sch' ? [{ value: 'bom' as Tab, label: 'BOM', icon: <Package size={12} /> }, { value: 'firmware' as Tab, label: 'Firmware', icon: <Cpu size={12} /> }] : []),
                 { value: 'source', label: 'Source', icon: <Code size={12} /> },
               ]}
@@ -212,6 +196,11 @@ export function BlobPage() {
           ) : null}
           <span className="text-xs text-fg-muted">{formatBytes(b.size)}</span>
           <span className="ml-auto flex items-center gap-1">
+            {design && kind === 'pcb' && (
+              <Link to="/$owner/$repo/outputs" params={{ owner: info.owner, repo: info.name }} search={{ sha: b.sha, id: `3d:${stripExt(path)}` }} className={buttonClass('default', 'sm')}>
+                <Rotate3d size={14} /> Open in 3D
+              </Link>
+            )}
             <Link to="/$owner/$repo/commits/$ref" params={{ owner: info.owner, repo: info.name, ref: gitRef }} search={{ path }} className={buttonClass('invisible', 'sm')}>
               <History size={14} /> History
             </Link>
@@ -248,7 +237,7 @@ export function BlobPage() {
               Renders are produced by the Render check. They appear here once it completes.
             </EmptyState>
           ))}
-        {design && tab === '3d' && kind === 'pcb' && <Board3DView owner={info.owner} repo={info.name} sha={b.sha} path={path} glb={glb} step={step} renders={renders3d} />}
+        {design && tab === '3d' && kind === 'pcb' && <Navigate to="/$owner/$repo/outputs" params={{ owner: info.owner, repo: info.name }} search={{ sha: b.sha, id: `3d:${stripExt(path)}` }} replace />}
         {design && tab === 'bom' && <BomView owner={info.owner} repo={info.name} sha={b.sha} path={path} />}
         {design && tab === 'fab' && kind === 'pcb' && <FabPanel owner={info.owner} repo={info.name} sha={b.sha} path={path} />}
         {design && tab === 'firmware' && kind === 'sch' && <div className="p-4"><PinmapPanel owner={info.owner} repo={info.name} sha={b.sha} /></div>}
