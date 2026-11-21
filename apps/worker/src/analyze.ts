@@ -1,3 +1,4 @@
+import { optimizeKicadGlbOffThread } from './glb-thread';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
@@ -531,7 +532,26 @@ export class Analyzer {
       return null;
     };
 
-    if (board && o.glb) await single('GLB', 'glb', 'board.glb', ['pcb', 'export', 'glb', '--subst-models', '--include-tracks', '--include-pads', '--include-zones', '--include-silkscreen', '--include-soldermask', '-f', board]);
+    if (board && o.glb) {
+      // kicad-cli's export, then compressed for the browser (often 14 MB -> under 1 MB) with parts tagged for finishing.
+      const target = join(out, 'board.glb');
+      const r = await this.cli.exec(['pcb', 'export', 'glb', '--subst-models', '--include-tracks', '--include-pads', '--include-zones', '--include-silkscreen', '--include-soldermask', '-f', '-o', this.rel(work, target), board], work);
+      if (await exists(target)) {
+        const raw = await readFile(target);
+        let meta: Record<string, unknown> = { rawBytes: raw.length };
+        try {
+          const small = await optimizeKicadGlbOffThread(raw);
+          await writeFile(target, small);
+          meta = { ...meta, compressed: true };
+        } catch (e) {
+          meta = { ...meta, compressed: false, compressError: (e as Error).message.slice(0, 200) };
+        }
+        await this.addArtifact(job, p.path, 'glb', 'board.glb', target, meta);
+        done.push('GLB');
+      } else {
+        failed.push(`GLB (${describeFailure(r)})`);
+      }
+    }
     if (board && o.step) await single('STEP', 'step', 'board.step', ['pcb', 'export', 'step', '--subst-models', '-f', board]);
 
     let gerberDir: string | null = null;

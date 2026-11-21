@@ -8,3 +8,5 @@ allowBuilds:
   # ssh2 falls back to pure-JS crypto; its native accelerators are optional.
   ssh2: false
   cpu-features: false
+  # gltf-transform pulls in sharp for textures; KiCad's board models have none, so its native build is not needed.
+  sharp: false
