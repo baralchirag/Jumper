@@ -11,17 +11,18 @@ type Audience = 'personal' | 'organization';
 
 /** What every plan gets: the product itself is never paywalled, only how much of it you use. */
 const EVERY_PLAN = [
-  'Unlimited public and private repositories',
-  'Visual diffs of schematics and boards',
-  'Pull requests with comments on parts, pads and tracks',
-  'ERC and DRC on every push',
-  'Renders, 3D, BOM pricing and fab packages',
-  'Releases, issues and discussions',
+  'Connect GitHub, GitLab or any git repository',
+  'Visual diffs of schematics and boards, in 2D and 3D',
+  'ERC and DRC on every commit, located on the board',
+  'A BOM with live stock and price breaks',
+  'Fab packages for JLCPCB, PCBWay and OSH Park',
+  'Read-only share links for clients and fabs',
 ];
 
 const PLANS: Record<Audience, PlanId[]> = {
   personal: ['free', 'pro'],
-  organization: ['free', 'team', 'enterprise'],
+  // Organizations are for paying teams; a trial runs on a personal account first.
+  organization: ['team', 'enterprise'],
 };
 
 const mb = (v: number | null) => (v === null ? 'Unlimited' : v >= 1024 ? `${Math.round(v / 1024)} GB` : `${v} MB`);
@@ -48,7 +49,7 @@ function price(plan: Plan, cycle: BillingCycle) {
 function TrialTimeline() {
   const steps = [
     { when: 'Day 1', title: 'Everything, free', body: `Create an account and push your boards. You get every feature and 2 GB of storage, no card needed.` },
-    { when: `Day ${FREE_TRIAL_DAYS_DEFAULT}`, title: 'Your trial ends', body: 'Nothing is deleted. Your boards, history, reviews and fab files stay readable and downloadable.' },
+    { when: `Day ${FREE_TRIAL_DAYS_DEFAULT}`, title: 'Your trial ends', body: 'Nothing is deleted. Your boards, history, check results and fab files stay readable and downloadable.' },
     { when: 'Then', title: 'Pick a plan to keep pushing', body: `Pro keeps you going with 20 GB. Invite people to stretch the trial: each person who joins adds 1 GB for ${REFERRAL_BONUS_DAYS_DEFAULT} days.` },
   ];
   return (
@@ -109,7 +110,7 @@ export function PricingPage() {
         <div>
           <h1 className="text-[clamp(2.5rem,1.6rem+2.6vw,4rem)] font-medium leading-[0.95]">Catch the respin before it ships.</h1>
           <p className="mt-4 max-w-xl text-[16px] leading-relaxed text-fg-muted">
-            Every plan gets the whole product: visual diffs, review on the board, ERC and DRC on every push, and fab packages. Try it free for {FREE_TRIAL_DAYS_DEFAULT} days, then keep your boards moving from {dollars((DEFAULT_PLANS.pro.priceAnnualCents ?? 0) / 1200)} a month.
+            Every plan includes the whole engine: visual diffs, ERC and DRC on every commit, a priced BOM and fab packages. Connect GitHub and try it free for {FREE_TRIAL_DAYS_DEFAULT} days, then keep your boards moving from {dollars((DEFAULT_PLANS.pro.priceAnnualCents ?? 0) / 1200)} a month.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -152,9 +153,8 @@ export function PricingPage() {
                 <h2 id={`plan-${id}`} className="flex items-center gap-2 text-xl font-medium">
                   {plan.name}
                   {highlight && <span className="rounded-sm bg-accent-emphasis px-1.5 py-0.5 text-[11.5px] font-medium text-fg-on-accent">Recommended</span>}
-                  {audience === 'organization' && id === 'free' && <span className="ml-2 text-sm font-normal text-fg-muted">for organizations</span>}
                 </h2>
-                <p className="mt-2 min-h-[3em] text-[14px] leading-relaxed text-fg-muted">{id === 'free' && audience === 'organization' ? 'For open-hardware groups and small teams getting started.' : plan.blurb}</p>
+                <p className="mt-2 min-h-[3em] text-[14px] leading-relaxed text-fg-muted">{plan.blurb}</p>
               </div>
               <div>
                 <p className="flex items-baseline gap-2">
@@ -177,7 +177,7 @@ export function PricingPage() {
               </dl>
               {extra.length > 0 && (
                 <ul className="flex flex-col gap-2 text-[14px]">
-                  <li className="text-fg-muted">{id === 'enterprise' ? 'Everything in Business, and:' : 'Everything in Free, and:'}</li>
+                  <li className="text-fg-muted">{id === 'enterprise' ? 'Everything in Business, and:' : 'Everything in Pro, and:'}</li>
                   {(id === 'enterprise' ? extra.filter((f) => !planFeatures('team').includes(f)) : extra).map((f) => (
                     <li key={f} className="flex gap-2">
                       <Check size={16} aria-hidden className="mt-0.5 shrink-0 text-success" />
@@ -209,7 +209,7 @@ export function PricingPage() {
             One mistake caught in review can cost more than a year of Pro.
           </h2>
           <p className="mt-3 max-w-2xl text-[15px] leading-relaxed opacity-80">
-            A swapped footprint, a missed DRC error, a wrong value in the BOM: Jumper puts every change in front of your team as a board, before you order.
+            A swapped footprint, a missed DRC error, a wrong value in the BOM: Jumper puts every commit in front of your team as a board, before you order.
           </p>
         </div>
         <Link to={me ? '/settings/$section' : '/signup'} params={me ? ({ section: 'usage' } as never) : (undefined as never)} className={buttonClass('accent', 'md')}>

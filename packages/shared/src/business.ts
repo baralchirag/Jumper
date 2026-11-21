@@ -1,4 +1,4 @@
-// Wire types for the retention, business and enterprise features: stock alerts, digests, insights, templates,
+// Wire types for the retention, business and enterprise features: stock alerts, templates,
 // single sign-on, two-factor login, roles, organization policies, invoices, licensing, SCIM, legal hold,
 // export control and compliance reports.
 import { z } from 'zod';
@@ -10,9 +10,9 @@ import type { UserSummary } from './schemas';
 // ---------- entitlements ----------
 
 /** Features that need the Business plan (hosted) or a licence (self-hosted). */
-export const BUSINESS_FEATURES = ['sso', 'custom_roles', 'org_policies', 'release_approval', 'audit_export', 'security_policies', 'insights'] as const;
+export const BUSINESS_FEATURES = ['sso', 'custom_roles', 'org_policies', 'audit_export', 'security_policies'] as const;
 /** Features that need the Enterprise plan or an enterprise licence. */
-export const ENTERPRISE_FEATURES = ['saml', 'scim', 'legal_hold', 'export_control', 'compliance', 'release_records', 'retention'] as const;
+export const ENTERPRISE_FEATURES = ['saml', 'scim', 'legal_hold', 'export_control', 'compliance', 'retention'] as const;
 export const FEATURES = [...BUSINESS_FEATURES, ...ENTERPRISE_FEATURES] as const;
 export type Feature = (typeof FEATURES)[number];
 
@@ -20,16 +20,13 @@ export const FEATURE_LABELS: Record<Feature, string> = {
   sso: 'Single sign-on (Google, Microsoft, OIDC)',
   custom_roles: 'Custom roles',
   org_policies: 'Organization-wide policies',
-  release_approval: 'Release approval by named people',
   audit_export: 'Audit log export',
   security_policies: 'Required two-factor login, IP allowlists, session timeouts',
-  insights: 'Team insights',
   saml: 'SAML single sign-on',
   scim: 'SCIM user provisioning',
   legal_hold: 'Legal hold',
   export_control: 'Export-controlled repositories',
   compliance: 'RoHS and REACH reports',
-  release_records: 'Signed release records',
   retention: 'Data retention settings',
 };
 

@@ -41,8 +41,8 @@ export function planPriceCents(plan: Plan, cycle: BillingCycle, seats: number): 
 
 export const DEFAULT_PLANS: Record<PlanId, Plan> = {
   free: { id: 'free', name: 'Free', blurb: 'Try everything with 2 GB of storage for your first 30 days.', limits: { storageMb: 2048, checkMinutes: 500, seats: 5 }, priceMonthlyCents: 0, priceAnnualCents: 0 },
-  pro: { id: 'pro', name: 'Pro', blurb: 'For professional designers with private client work.', limits: { storageMb: 20_480, checkMinutes: 3000, seats: 10 }, priceMonthlyCents: 1200, priceAnnualCents: 12_000 },
-  team: { id: 'team', name: 'Business', blurb: 'For hardware teams: single sign-on, roles, organization policies and release approval.', limits: { storageMb: 102_400, checkMinutes: 10_000, seats: 50 }, priceMonthlyCents: 2900, priceAnnualCents: 29_000 },
+  pro: { id: 'pro', name: 'Pro', blurb: 'For professional designers and small teams with private client work.', limits: { storageMb: 20_480, checkMinutes: 3000, seats: 10 }, priceMonthlyCents: 1200, priceAnnualCents: 12_000 },
+  team: { id: 'team', name: 'Business', blurb: 'For hardware teams: single sign-on, roles, organization policies and an audit trail.', limits: { storageMb: 102_400, checkMinutes: 10_000, seats: 50 }, priceMonthlyCents: 2900, priceAnnualCents: 29_000 },
   enterprise: { id: 'enterprise', name: 'Enterprise', blurb: 'For regulated and large teams: SAML, SCIM, legal hold, export control and compliance reports.', limits: { storageMb: null, checkMinutes: null, seats: null }, priceMonthlyCents: null, priceAnnualCents: null },
 };
 

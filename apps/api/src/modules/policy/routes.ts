@@ -173,7 +173,6 @@ const policyRoutes: FastifyPluginAsyncZod = async (app) => {
     const changed = (keys: (keyof OrgPolicy)[]) => keys.some((k) => JSON.stringify(p[k]) !== JSON.stringify(before[k]));
     // Each part of the policy belongs to a feature; only what actually changes has to be included in the plan.
     if (changed(['requiredChecks', 'minApprovals', 'signoffRules', 'partPolicy', 'releaseBranches', 'requireWatermark', 'defaultWatermark'])) await requireFeature(ctx, ns, 'org_policies');
-    if (changed(['releaseApprovers', 'releaseApprovals'])) await requireFeature(ctx, ns, 'release_approval');
     if (changed(['requireTwoFactor', 'ipAllowlist', 'sessionMaxHours'])) await requireFeature(ctx, ns, 'security_policies');
     for (const b of p.releaseBranches) {
       const err = validatePattern(b);
