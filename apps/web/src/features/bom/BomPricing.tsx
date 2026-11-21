@@ -10,7 +10,7 @@ const usd = (n: number, digits = 2) => `$${n.toLocaleString('en-US', { minimumFr
 const unit = (n: number) => (n < 0.1 ? `$${n.toFixed(4)}` : `$${n.toFixed(3)}`);
 const compact = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}k` : String(n));
 
-const SEARCH_URL: Record<Supplier, (q: string) => string> = {
+export const SEARCH_URL: Record<Supplier, (q: string) => string> = {
   LCSC: (q) => `https://www.lcsc.com/search?q=${encodeURIComponent(q)}`,
   JLCPCB: (q) => `https://jlcpcb.com/parts/componentSearch?searchTxt=${encodeURIComponent(q)}`,
   Mouser: (q) => `https://www.mouser.com/c/?q=${encodeURIComponent(q)}`,
@@ -19,7 +19,7 @@ const SEARCH_URL: Record<Supplier, (q: string) => string> = {
 
 const esc = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
 
-function download(name: string, text: string) {
+export function download(name: string, text: string) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
   a.download = name;
@@ -27,7 +27,7 @@ function download(name: string, text: string) {
   URL.revokeObjectURL(a.href);
 }
 
-function pricedCsv(data: BomPricingResponse, choice: (l: PricedLine) => PricedOffer | null): string {
+export function pricedCsv(data: BomPricingResponse, choice: (l: PricedLine) => PricedOffer | null): string {
   const head = ['References', 'Value', 'Footprint', 'Qty needed', 'Supplier', 'SKU', 'MPN', 'Manufacturer', 'Buy qty', 'Unit price (USD)', 'Extended (USD)', 'Stock', 'Match', 'Datasheet', 'URL'];
   const rows = data.lines
     .filter((l) => !l.dnp && !l.skipped)
@@ -55,7 +55,7 @@ function pricedCsv(data: BomPricingResponse, choice: (l: PricedLine) => PricedOf
 }
 
 /** JLCPCB assembly BOM using the matched LCSC codes. */
-function jlcCsv(data: BomPricingResponse): string {
+export function jlcCsv(data: BomPricingResponse): string {
   const rows = data.lines
     .filter((l) => !l.dnp && !l.skipped)
     .map((l) => [l.value, l.references.join(','), l.footprint.slice(l.footprint.indexOf(':') + 1), (l.offers.JLCPCB ?? l.offers.LCSC)?.sku ?? '']);

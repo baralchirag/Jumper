@@ -1,12 +1,16 @@
 import { useState } from 'react';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, PackageX, RefreshCw } from 'lucide-react';
+import { ChevronRight, Download, PackageX, RefreshCw } from 'lucide-react';
 import type { BomAlertInfo, BomAlertKind, BomWatchInfo, ComplianceReport, ComplianceStatus } from '@jumper/shared';
 import { Box, BoxHeader, BoxRow, Button, Checkbox, EmptyState, Flash, Input, Label, PageSpinner, RelativeTime, type LabelTone } from '@jumper/ui';
 import { PageContainer, UnavailableNotice, isUnavailable, shortSha } from '../../shared/components/common';
 import { api, errorMessage, repoPath } from '../../shared/lib/api';
 import { keys } from '../../shared/lib/queries';
 import { canWrite, useRepoInfo } from '../repo/context';
+import { useOutputs } from '../repo/Outputs';
+import { RefPicker } from '../../shared/components/RefPicker';
+import { PartsList } from './PartsList';
 
 const KIND: Record<BomAlertKind, { label: string; tone: LabelTone }> = {
   out_of_stock: { label: 'Out of stock', tone: 'danger' },
@@ -22,14 +26,64 @@ const STATUS: Record<ComplianceStatus, { label: string; tone: LabelTone }> = {
   unknown: { label: 'Unknown', tone: 'default' },
 };
 
-/** Parts health for a repository: supplier stock and end-of-life alerts, and the RoHS / REACH roll-up. */
+/**
+ * The parts on the board: what each one is, what it costs and whether it can be bought. Below, folded away, the
+ * daily stock check and the RoHS / REACH report.
+ */
 export function PartsPage() {
   const info = useRepoInfo();
-  if (info.isEmpty) return <EmptyState icon={<PackageX size={24} />} title="No parts yet">Push a KiCad project to watch its parts for stock and end-of-life problems.</EmptyState>;
+  const search = useSearch({ strict: false }) as { sha?: string; project?: string };
+  const navigate = useNavigate();
+  const ref = search.sha ?? info.defaultBranch;
+  const outputs = useOutputs(info.owner, info.name, info.isEmpty ? undefined : ref);
+  if (info.isEmpty) return <EmptyState icon={<PackageX size={24} />} title="No parts yet">Push a KiCad project to see its parts, prices and stock.</EmptyState>;
+
+  // The commit's BOM output names each KiCad project; its root schematic shares the project's name.
+  const projects = [...new Set((outputs.data?.artifacts ?? []).filter((a) => a.kind === 'bom').map((a) => a.projectPath))];
+  const project = projects.find((p) => p === search.project) ?? projects[0];
+  const schematic = project?.replace(/\.kicad_pro$/, '.kicad_sch');
+  const go = (s: { sha?: string; project?: string }) => void navigate({ to: '/$owner/$repo/parts', params: { owner: info.owner, repo: info.name }, search: { ...search, ...s }, replace: true });
+
   return (
-    <PageContainer className="max-w-5xl py-8">
-      <StockSection />
-      <ComplianceSection />
+    <PageContainer className="max-w-6xl py-8">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div className="max-w-2xl">
+          <h1 className="headline text-[length:var(--t-l)]">Parts</h1>
+          <p className="mt-1 text-[14px] text-fg-muted">Every part in your schematic, what it costs and whether you can buy it right now.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {projects.length > 1 && (
+            <select value={project} onChange={(e) => go({ project: e.target.value })} className="h-8 rounded-md border border-border bg-canvas px-2 text-[13px]" aria-label="Project">
+              {projects.map((p) => (
+                <option key={p} value={p}>
+                  {p.replace(/\.kicad_pro$/, '')}
+                </option>
+              ))}
+            </select>
+          )}
+          <RefPicker owner={info.owner} repo={info.name} value={ref} onChange={(r) => go({ sha: r })} />
+        </div>
+      </header>
+
+      {outputs.isLoading ? (
+        <PageSpinner />
+      ) : outputs.data && schematic ? (
+        <PartsList owner={info.owner} repo={info.name} sha={outputs.data.sha} path={schematic} />
+      ) : (
+        <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-[13px] text-fg-muted">
+          The parts list appears once the checks for this commit have run. If there is no schematic, there are no parts to list.
+        </p>
+      )}
+
+      <details className="group mt-12 border-t border-border pt-6">
+        <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[15px] font-medium">
+          <ChevronRight size={16} className="transition-transform group-open:rotate-90" /> More: daily stock check and RoHS report
+        </summary>
+        <div className="mt-6">
+          <StockSection />
+          <ComplianceSection />
+        </div>
+      </details>
     </PageContainer>
   );
 }
@@ -90,9 +144,9 @@ function StockSection() {
     <section className="mb-12">
       <header className="mb-4 flex flex-wrap items-end justify-between gap-4">
         <div className="max-w-2xl">
-          <h2 className="headline text-[length:var(--t-m)]">Stock and end of life</h2>
+          <h2 className="text-[16px] font-semibold">Daily stock check</h2>
           <p className="mt-1 text-[14px] text-fg-muted">
-            The BOM on <span className="font-mono">{info.defaultBranch}</span> is checked against the suppliers once a day. Parts that run out, cannot cover a build, or are being discontinued raise an alert for the people who follow this repository.
+            Once a day, Jumper looks up the parts on <span className="font-mono">{info.defaultBranch}</span> again and tells the people who follow this repository if one runs out, gets too scarce for a build, or is being discontinued.
           </p>
         </div>
         {writable && w.available && (
@@ -106,7 +160,7 @@ function StockSection() {
 
       {writable && w.available && (
         <div className="mb-5 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-md border border-border p-4">
-          <Checkbox checked={w.enabled} onChange={(e) => save.mutate({ enabled: e.target.checked, boards: n })} label="Watch this repository's parts" hint="Daily check, with an alert when something changes." />
+          <Checkbox checked={w.enabled} onChange={(e) => save.mutate({ enabled: e.target.checked, boards: n })} label="Check every day" hint="You get a notification when a part's availability changes." />
           <label className="flex items-center gap-2 text-[13px] text-fg-muted">
             Boards per build
             <Input type="number" min={1} max={100000} value={boards === '' ? String(w.boards) : boards} onChange={(e) => setBoards(e.target.value)} onBlur={() => n !== w.boards && n >= 1 && save.mutate({ enabled: w.enabled, boards: n })} className="h-8 w-24" aria-label="Boards per build" />
@@ -119,7 +173,7 @@ function StockSection() {
       {w.lastError && <Flash tone="warning" className="mb-4">Last check could not finish: {w.lastError}</Flash>}
 
       {open.length === 0 ? (
-        <p className="rounded-md border border-dashed border-border px-4 py-6 text-center text-[13px] text-fg-muted">{w.lastCheckedAt ? 'No problems found in the last check.' : 'Nothing checked yet.'}</p>
+        <p className="rounded-md border border-dashed border-border px-4 py-6 text-center text-[13px] text-fg-muted">{w.lastCheckedAt ? 'No problems found in the last check.' : w.enabled ? 'The first check runs within a day.' : 'Turn on the daily check to be told when a part runs out.'}</p>
       ) : (
         <Box>
           <BoxHeader className="text-sm font-medium">{open.length} open {open.length === 1 ? 'alert' : 'alerts'}</BoxHeader>
@@ -151,13 +205,13 @@ function ComplianceSection() {
   return (
     <section>
       <header className="mb-4 max-w-2xl">
-        <h2 className="headline text-[length:var(--t-m)]">RoHS and REACH</h2>
+        <h2 className="text-[16px] font-semibold">RoHS and REACH report</h2>
         <p className="mt-1 text-[14px] text-fg-muted">
-          A roll-up from the RoHS and REACH fields on your schematic symbols, optionally filled in from supplier data. Use it to see what still needs a declaration. It is not a certificate.
+          RoHS (lead-free) and REACH (hazardous substances) are EU rules most products must meet. This report collects the RoHS and REACH fields from your schematic symbols, so you can see which parts still need a declaration. It is a checklist, not a certificate.
         </p>
       </header>
       <div className="mb-4 flex flex-wrap items-center gap-4">
-        <Checkbox checked={suppliers} onChange={(e) => setSuppliers(e.target.checked)} label="Ask suppliers about parts with no RoHS field" />
+        <Checkbox checked={suppliers} onChange={(e) => setSuppliers(e.target.checked)} label="Look up parts that have no RoHS field" />
         <Button size="sm" onClick={() => (run ? void q.refetch() : setRun(true))} loading={q.isFetching}>
           {run ? 'Run again' : 'Build report'}
         </Button>
