@@ -10,6 +10,7 @@ import {
   ExtrudeGeometry,
   Group,
   Mesh,
+  MeshPhysicalMaterial,
   MeshStandardMaterial,
   Path,
   Shape,
@@ -17,8 +18,12 @@ import {
   Vector2,
   type Material,
 } from 'three';
-import type { Footprint, Graphic, Pad, Pcb, Pt } from '@jumper/kicad-core/types';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import type { Footprint, Pad, Pcb, Pt } from '@jumper/kicad-core/types';
 import { arcPoints, padOutline, rotate } from './geometry';
+import { area, circlePts, graphicPoints, outlineLoops } from './outline';
+
+export { outlineLoops };
 
 export const MASK_COLORS = {
   green: 0x0f5a2a,
@@ -37,78 +42,12 @@ export interface Board3DOptions {
   components?: boolean;
 }
 
-const COPPER_GOLD = 0xd8b04a;
-const FR4_EDGE = 0xb9a97a;
-const SILK_ON = { white: 0xf2f2f2, black: 0x111111 };
+const COPPER_GOLD = 0xe2bf6b; // ENIG finish
+const FR4_EDGE = 0xcbbf94;
+const SILK_ON = { white: 0xf4f4f0, black: 0x111111 };
 const EPS = 0.012;
 
 // ---------- 2D helpers (KiCad mm, y down) ----------
-
-function graphicPoints(g: Graphic): { pts: Pt[]; closed: boolean } | null {
-  switch (g.type) {
-    case 'line':
-      return { pts: [g.start, g.end], closed: false };
-    case 'arc':
-      return { pts: arcPoints(g.start, g.mid, g.end, 72), closed: false };
-    case 'rect':
-      return { pts: [g.start, { x: g.end.x, y: g.start.y }, g.end, { x: g.start.x, y: g.end.y }], closed: true };
-    case 'circle': {
-      const r = Math.hypot(g.end.x - g.center.x, g.end.y - g.center.y);
-      return { pts: circlePts(g.center, r, 72), closed: true };
-    }
-    case 'poly':
-      return { pts: g.pts, closed: true };
-    case 'curve':
-      return { pts: g.pts, closed: false };
-  }
-}
-
-function circlePts(c: Pt, r: number, n = 32): Pt[] {
-  const pts: Pt[] = [];
-  for (let i = 0; i < n; i++) pts.push({ x: c.x + r * Math.cos((i / n) * Math.PI * 2), y: c.y + r * Math.sin((i / n) * Math.PI * 2) });
-  return pts;
-}
-
-const near = (a: Pt, b: Pt, tol = 0.02) => Math.abs(a.x - b.x) <= tol && Math.abs(a.y - b.y) <= tol;
-
-function area(pts: Pt[]): number {
-  let a = 0;
-  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) a += (pts[j]!.x + pts[i]!.x) * (pts[j]!.y - pts[i]!.y);
-  return a / 2;
-}
-
-/** Chain Edge.Cuts segments into closed loops. */
-export function outlineLoops(graphics: Graphic[]): Pt[][] {
-  const loops: Pt[][] = [];
-  const open: Pt[][] = [];
-  for (const g of graphics) {
-    const p = graphicPoints(g);
-    if (!p || p.pts.length < 2) continue;
-    (p.closed ? loops : open).push([...p.pts]);
-  }
-  while (open.length) {
-    let chain = open.pop()!;
-    let grown = true;
-    while (grown && !near(chain[0]!, chain[chain.length - 1]!)) {
-      grown = false;
-      for (let i = 0; i < open.length; i++) {
-        const s = open[i]!;
-        const head = chain[0]!;
-        const tail = chain[chain.length - 1]!;
-        if (near(tail, s[0]!)) chain = [...chain, ...s.slice(1)];
-        else if (near(tail, s[s.length - 1]!)) chain = [...chain, ...s.slice(0, -1).reverse()];
-        else if (near(head, s[s.length - 1]!)) chain = [...s.slice(0, -1), ...chain];
-        else if (near(head, s[0]!)) chain = [...s.slice(1).reverse(), ...chain];
-        else continue;
-        open.splice(i, 1);
-        grown = true;
-        break;
-      }
-    }
-    if (chain.length >= 3 && near(chain[0]!, chain[chain.length - 1]!)) loops.push(chain.slice(0, -1));
-  }
-  return loops.filter((l) => l.length >= 3 && Math.abs(area(l)) > 1e-3);
-}
 
 function padShape(pad: Pad): Pt[] {
   if (pad.shape === 'custom' && pad.polygons.length) return pad.polygons[0]!;
@@ -208,8 +147,13 @@ function toShape(outer: Pt[], holes: Pt[][]): Shape {
   return shape;
 }
 
+/** Footprint library id plus its 3D model file names: the model name is usually the most precise description. */
+function partName(fp: Footprint): string {
+  return [fp.libId, ...fp.models.map((m) => m.split('/').pop() ?? m)].join(' ').toLowerCase();
+}
+
 function bodyHeight(fp: Footprint): number {
-  const name = fp.libId.toLowerCase();
+  const name = partName(fp);
   const ref = fp.reference.replace(/\d.*$/, '').toUpperCase();
   const chip = name.match(/_(01005|0201|0402|0603|0805|1206|1210|1812|2010|2512)_/);
   if (chip) return { '01005': 0.15, '0201': 0.25, '0402': 0.35, '0603': 0.45, '0805': 0.6, '1206': 0.65, '1210': 0.7, '1812': 0.9, '2010': 0.7, '2512': 0.7 }[chip[1]!] ?? 0.5;
@@ -233,40 +177,277 @@ function bodyHeight(fp: Footprint): number {
   return 1.2;
 }
 
-function bodyColor(fp: Footprint): number {
-  const name = fp.libId.toLowerCase();
+const SKIP_BODY = /mountinghole|testpoint|fiducial|logo|nettie|solderjumper|jumper:|symbol:/i;
+const DEG = Math.PI / 180;
+
+type PartKind = 'chip' | 'led' | 'ic' | 'header' | 'socket' | 'switch' | 'shell' | 'can' | 'crystal' | 'axial' | 'radial' | 'generic';
+
+function partKind(fp: Footprint): PartKind {
+  const name = partName(fp);
   const ref = fp.reference.replace(/\d.*$/, '').toUpperCase();
-  if (ref === 'C' && /_(0201|0402|0603|0805|1206|1210)_/.test(name)) return 0xb48a5a;
-  if (ref === 'LED' || /led/.test(name)) return 0xf0f0e6;
-  if (/usb|microsd|sd_card|shield/.test(name)) return 0xbfc3c7;
-  if (/esp32|module/.test(name)) return 0xa9adb1;
-  if (/pinheader|pinsocket|header|socket/.test(name)) return 0x1a1a1a;
-  if (/jst|ph_|xh_/.test(name)) return 0xece4cf;
-  if (ref === 'SW') return 0x2b2b2b;
-  return 0x202124;
+  const chip = /_(01005|0201|0402|0603|0805|1206|1210|1812|2010|2512)_/.test(name);
+  if (/led/.test(name) || ref === 'LED') return 'led';
+  if (chip) return 'chip';
+  if (/pinheader|pin_header/.test(name)) return 'header';
+  if (/pinsocket|socket/.test(name)) return 'socket';
+  if (/usb|microsd|sd_card|shield|esp32|wroom|wrover|module/.test(name)) return 'shell';
+  if (/cp_elec|electrolytic/.test(name)) return 'can';
+  if (/crystal|xtal|oscillator/.test(name)) return 'crystal';
+  if (/sw_|button|switch|ts-?1088|pts645|pts810|evqp/.test(name) || ref === 'SW') return 'switch';
+  if (/soic|sop|ssop|msop|tssop|qfn|dfn|son|lga|bga|qfp|sot-?\d|sc-?70|sod-?\d|d_sm|to-?252|to-?263|wson|vson/.test(name)) return 'ic';
+  // Through-hole two-lead parts: resistors and diodes lie between their leads, capacitors stand up as cans.
+  const tht2 = fp.pads.length === 2 && fp.pads.every((p) => p.kind === 'thru_hole');
+  if (tht2 && /axial|r_|resistor|do-?\d|d_do|diode/.test(name)) return 'axial';
+  if (tht2 && (ref === 'R' || ref === 'D')) return 'axial';
+  if (tht2 && (ref === 'C' || /radial|cp_|c_disc|c_rect/.test(name))) return 'radial';
+  if (/dip|dil/.test(name) || ref === 'U' || ref === 'Q') return 'ic';
+  return 'generic';
 }
 
-const SKIP_BODY = /mountinghole|testpoint|fiducial|logo|nettie|solderjumper|jumper:|symbol:/i;
-
-/** Body footprint from the courtyard (falls back to pads/bbox). */
-function bodyRect(fp: Footprint, side: 'F' | 'B'): { cx: number; cy: number; w: number; h: number } | null {
-  const crt = fp.graphics.filter((g) => g.layer === `${side}.CrtYd` || g.layer === `${side}.Fab`);
-  const pts = crt.flatMap((g) => graphicPoints(g)?.pts ?? []);
-  const src = pts.length ? pts : fp.pads.flatMap(padShape);
-  if (!src.length) return null;
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const p of src) {
-    minX = Math.min(minX, p.x);
-    minY = Math.min(minY, p.y);
-    maxX = Math.max(maxX, p.x);
-    maxY = Math.max(maxY, p.y);
+/** The surface a real part of this footprint mostly shows: used for 3D models that arrive without colours. */
+export type PartFinish = { color: number; roughness: number; metalness: number };
+export function partFinish(fp: Footprint): PartFinish {
+  const kind = partKind(fp);
+  const ref = fp.reference.replace(/\d.*$/, '').toUpperCase();
+  const plastic = (color: number, roughness = 0.65): PartFinish => ({ color, roughness, metalness: 0 });
+  const metal = (color: number, roughness = 0.3): PartFinish => ({ color, roughness, metalness: 0.9 });
+  switch (kind) {
+    case 'chip':
+      return ref === 'C' ? plastic(0xa4855c, 0.72) : ref === 'L' || ref === 'FB' ? plastic(0x3a3a3c) : plastic(0x161617, 0.6);
+    case 'led':
+      return plastic(0xece9e1, 0.5);
+    case 'shell':
+    case 'crystal':
+      return metal(0xc8ccd1, 0.26);
+    case 'can':
+      return metal(0xb9bdc2, 0.35);
+    case 'axial':
+      return ref === 'D' ? plastic(0x1d1d1f, 0.4) : plastic(0xd6c094, 0.6);
+    case 'radial':
+      return plastic(0x1e3a6b, 0.45);
+    case 'header':
+    case 'socket':
+      return plastic(0x141414, 0.7);
+    case 'switch':
+      return plastic(0x2a2a2c, 0.6);
+    case 'generic':
+      return ref === 'J' || ref === 'P' || ref === 'CN' ? plastic(0xefe8d6, 0.78) : plastic(0x1d1d1f, 0.62);
+    default:
+      return plastic(0x1d1d1f, 0.62);
   }
-  // Courtyards include clearance; Fab outlines are the body itself.
-  const inset = pts.length && crt.every((g) => g.layer.endsWith('CrtYd')) ? 0.3 : 0;
-  const w = maxX - minX - inset * 2;
-  const h = maxY - minY - inset * 2;
-  if (w <= 0.05 || h <= 0.05) return null;
-  return { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, w, h };
+}
+
+/** Shared physically based materials for parts, created once per build. */
+function partMaterials() {
+  const std = (color: number, roughness: number, metalness = 0) => new MeshStandardMaterial({ color, roughness, metalness });
+  return {
+    tin: std(0xd9dbde, 0.3, 1),
+    gold: std(0xe6bd62, 0.28, 1),
+    epoxy: std(0x1c1c1e, 0.55),
+    resistor: std(0x161617, 0.6),
+    mlcc: std(0xa4855c, 0.72),
+    ceramicWhite: std(0xece9e1, 0.6),
+    plastic: std(0x141414, 0.7),
+    nylon: std(0xefe8d6, 0.78),
+    shell: std(0xc8ccd1, 0.24, 1),
+    aluminium: std(0xb9bdc2, 0.35, 1),
+    axial: std(0xd6c094, 0.6),
+    sleeve: std(0x1e3a6b, 0.45),
+    darkGrey: std(0x3a3c40, 0.6),
+    led: new MeshPhysicalMaterial({ color: 0xfff3c4, roughness: 0.1, transmission: 0.6, thickness: 0.4, ior: 1.5 }),
+  };
+}
+type PartMats = ReturnType<typeof partMaterials>;
+
+/** Points expressed in the footprint's own (unrotated) frame, relative to its anchor. */
+function toLocal(fp: Footprint, p: Pt): Pt {
+  return rotate({ x: p.x - fp.at.x, y: p.y - fp.at.y }, -fp.rotation);
+}
+
+interface Rect {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+function rectOf(pts: Pt[]): Rect | null {
+  if (!pts.length) return null;
+  const r = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+  for (const p of pts) {
+    r.minX = Math.min(r.minX, p.x);
+    r.minY = Math.min(r.minY, p.y);
+    r.maxX = Math.max(r.maxX, p.x);
+    r.maxY = Math.max(r.maxY, p.y);
+  }
+  return r;
+}
+
+/** Body outline in the footprint frame: the Fab outline (the body itself), else the courtyard minus its clearance. */
+function localBody(fp: Footprint, side: 'F' | 'B'): Rect | null {
+  const pick = (layer: string) => fp.graphics.filter((g) => g.layer === `${side}.${layer}`).flatMap((g) => graphicPoints(g)?.pts ?? []);
+  const fab = rectOf(pick('Fab').map((p) => toLocal(fp, p)));
+  if (fab && fab.maxX - fab.minX > 0.1 && fab.maxY - fab.minY > 0.1) return fab;
+  const crt = rectOf(pick('CrtYd').map((p) => toLocal(fp, p)));
+  if (crt) return { minX: crt.minX + 0.3, minY: crt.minY + 0.3, maxX: crt.maxX - 0.3, maxY: crt.maxY - 0.3 };
+  return rectOf(fp.pads.flatMap(padShape).map((p) => toLocal(fp, p)));
+}
+
+/** Collects boxes and cylinders per material in footprint-local space (x right, y up, z out of the board). */
+class PartBuilder {
+  private parts = new Map<Material, BufferGeometry[]>();
+
+  box(m: Material, cx: number, cy: number, w: number, h: number, z0: number, z1: number, rot = 0): void {
+    if (w <= 0 || h <= 0 || z1 <= z0) return;
+    const g = new BoxGeometry(w, h, z1 - z0);
+    if (rot) g.rotateZ(rot);
+    g.translate(cx, cy, (z0 + z1) / 2);
+    this.add(m, g);
+  }
+
+  cylinder(m: Material, cx: number, cy: number, r: number, z0: number, z1: number, segments = 28): void {
+    const g = new CylinderGeometry(r, r, z1 - z0, segments);
+    g.rotateX(Math.PI / 2);
+    g.translate(cx, cy, (z0 + z1) / 2);
+    this.add(m, g);
+  }
+
+  add(m: Material, g: BufferGeometry): void {
+    g.deleteAttribute('uv');
+    const list = this.parts.get(m);
+    if (list) list.push(g);
+    else this.parts.set(m, [g]);
+  }
+
+  build(): Group {
+    const out = new Group();
+    for (const [m, list] of this.parts) {
+      const merged = list.length === 1 ? list[0]! : mergeGeometries(list, false);
+      if (merged) out.add(new Mesh(merged, m));
+      if (list.length > 1) for (const g of list) g.dispose();
+    }
+    return out;
+  }
+}
+
+/** A component body shaped and finished like the real part, built from its footprint. */
+function buildPart(fp: Footprint, side: 'F' | 'B', mats: PartMats, thickness: number): Group | null {
+  const body = localBody(fp, side);
+  if (!body) return null;
+  const kind = partKind(fp);
+  const h = bodyHeight(fp);
+  const b = new PartBuilder();
+  const w = body.maxX - body.minX;
+  const d = body.maxY - body.minY;
+  const cx = (body.minX + body.maxX) / 2;
+  // Local y is KiCad's (down); three's is up.
+  const cy = -(body.minY + body.maxY) / 2;
+  const lift = 0.03;
+  const pads = fp.pads.map((p) => ({ pad: p, at: toLocal(fp, p.at), rot: (p.rotation - fp.rotation) * DEG }));
+  const inside = (q: Pt, m = 0) => q.x > body.minX + m && q.x < body.maxX - m && q.y > body.minY + m && q.y < body.maxY - m;
+
+  switch (kind) {
+    case 'chip':
+    case 'led': {
+      const long = w >= d;
+      const len = long ? w : d;
+      const cap = Math.min(len * 0.22, 0.5);
+      const core = kind === 'led' ? mats.ceramicWhite : /^R/i.test(fp.reference) ? mats.resistor : /^C/i.test(fp.reference) ? mats.mlcc : mats.epoxy;
+      b.box(core, cx, cy, w, d, lift, lift + h);
+      for (const s of [-1, 1]) {
+        const ox = long ? s * (len / 2 - cap / 2) : 0;
+        const oy = long ? 0 : s * (len / 2 - cap / 2);
+        b.box(mats.tin, cx + ox, cy + oy, long ? cap + 0.01 : w + 0.02, long ? d + 0.02 : cap + 0.01, lift - 0.01, lift + h + 0.01);
+      }
+      if (kind === 'led') b.box(mats.led, cx, cy, w * 0.6, d * 0.6, lift + h, lift + h + 0.12);
+      break;
+    }
+    case 'ic': {
+      b.box(mats.epoxy, cx, cy, w, d, lift + 0.05, lift + h);
+      for (const { pad, at, rot } of pads) {
+        if (pad.kind !== 'smd' || inside(at, 0.05)) continue;
+        // Gull-wing or J lead: a tinned strip from the body edge over the pad.
+        b.box(mats.tin, at.x, -at.y, pad.size.x * 0.75, pad.size.y * 0.75, 0, 0.16, rot);
+      }
+      // Pin-1 dimple.
+      b.cylinder(mats.plastic, body.minX + Math.min(w, d) * 0.18, -body.minY - Math.min(w, d) * 0.18, Math.min(w, d) * 0.06, lift + h, lift + h + 0.005, 16);
+      break;
+    }
+    case 'header':
+    case 'socket': {
+      const base = kind === 'header' ? 2.5 : h;
+      b.box(kind === 'header' ? mats.plastic : mats.plastic, cx, cy, w, d, lift, lift + base);
+      for (const { pad, at } of pads) {
+        if (pad.kind !== 'thru_hole') continue;
+        if (kind === 'header') b.box(mats.gold, at.x, -at.y, 0.64, 0.64, -thickness - 3, lift + base + 6);
+        else b.box(mats.gold, at.x, -at.y, 0.6, 0.6, -thickness - 3, lift);
+      }
+      break;
+    }
+    case 'switch': {
+      b.box(mats.tin, cx, cy, w, d, lift, lift + h * 0.45);
+      b.box(mats.plastic, cx, cy, w * 0.92, d * 0.92, lift + 0.05, lift + h * 0.42);
+      b.cylinder(mats.plastic, cx, cy, Math.min(w, d) * 0.28, lift + h * 0.45, lift + h);
+      break;
+    }
+    case 'shell':
+      b.box(mats.shell, cx, cy, w, d, lift, lift + h);
+      break;
+    case 'axial': {
+      // Body along the line between the leads, about half their spacing long, lifted off the board.
+      const [p0, p1] = [pads[0]!.at, pads[1]!.at];
+      const len = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+      const ang = Math.atan2(-(p1.y - p0.y), p1.x - p0.x);
+      const mx = (p0.x + p1.x) / 2;
+      const my = -(p0.y + p1.y) / 2;
+      const diode = /^D/i.test(fp.reference);
+      const r = diode ? 0.9 : 1.15;
+      const bodyLen = Math.min(len * 0.55, 6.5);
+      const g = new CylinderGeometry(r, r, bodyLen, 24);
+      g.rotateZ(Math.PI / 2 + ang);
+      g.translate(mx, my, lift + r + 0.4);
+      b.add(diode ? mats.epoxy : mats.axial, g);
+      // Leads: down from the body ends to the holes.
+      for (const q of [p0, p1]) b.box(mats.tin, q.x, -q.y, 0.5, 0.5, -thickness - 1.2, lift + r + 0.4);
+      const lead = new CylinderGeometry(0.25, 0.25, len, 8);
+      lead.rotateZ(Math.PI / 2 + ang);
+      lead.translate(mx, my, lift + r + 0.4);
+      b.add(mats.tin, lead);
+      break;
+    }
+    case 'radial': {
+      const r = Math.max(Math.min(w, d) / 2, 1.5);
+      const hh = Math.max(h, r * 2.2);
+      b.cylinder(mats.sleeve, cx, cy, r * 0.95, lift + 0.4, lift + hh, 40);
+      b.cylinder(mats.aluminium, cx, cy, r * 0.8, lift + hh, lift + hh + 0.05, 40);
+      break;
+    }
+    case 'can': {
+      const r = Math.min(w, d) / 2;
+      b.box(mats.plastic, cx, cy, w, d, lift, lift + 0.6);
+      b.cylinder(mats.aluminium, cx, cy, r * 0.95, lift + 0.6, lift + h, 40);
+      break;
+    }
+    case 'crystal':
+      b.box(mats.ceramicWhite, cx, cy, w, d, lift, lift + h * 0.55);
+      b.box(mats.shell, cx, cy, w * 0.9, d * 0.9, lift + h * 0.55, lift + h);
+      break;
+    default:
+      b.box(/^J/i.test(fp.reference) ? mats.nylon : w * d > 150 ? mats.darkGrey : mats.epoxy, cx, cy, w, d, lift, lift + h);
+  }
+
+  // Through-hole leads poke out of the far side of the board, clipped and soldered.
+  if (kind !== 'header' && kind !== 'socket' && kind !== 'axial') {
+    for (const { pad, at } of pads) {
+      if (pad.kind !== 'thru_hole' || !pad.drill) continue;
+      const pin = Math.max(Math.min(pad.drill.width, pad.drill.height || pad.drill.width) * 0.6, 0.3);
+      b.box(mats.tin, at.x, -at.y, pin, pin, -thickness - 1.2, lift);
+    }
+  }
+
+  const g = b.build();
+  g.rotation.z = fp.rotation * DEG;
+  if (side === 'B') g.scale.z = -1;
+  return g;
 }
 
 export function buildBoard3D(pcb: Pcb, opts: Board3DOptions = {}): Group {
@@ -293,8 +474,9 @@ export function buildBoard3D(pcb: Pcb, opts: Board3DOptions = {}): Group {
   const substrateHoles = drills.length + viaHoles.length > 4000 ? drills : [...drills, ...viaHoles];
 
   // Substrate with soldermask-coloured faces and FR4 edges.
-  const maskMat = new MeshStandardMaterial({ color: maskColor, roughness: 0.45, metalness: 0.05 });
-  const edgeMat = new MeshStandardMaterial({ color: FR4_EDGE, roughness: 0.9 });
+  // LPI soldermask is a thin glossy coat: a clearcoat over a satin base reads like the real thing.
+  const maskMat = new MeshPhysicalMaterial({ color: maskColor, roughness: 0.55, metalness: 0, clearcoat: 0.8, clearcoatRoughness: 0.25 });
+  const edgeMat = new MeshStandardMaterial({ color: FR4_EDGE, roughness: 0.85 });
   const body = new ExtrudeGeometry(toShape(outer, [...cutouts, ...substrateHoles]), { depth: t, bevelEnabled: false, curveSegments: 8 });
   body.translate(0, 0, -t / 2);
   group.add(new Mesh(body, [maskMat, edgeMat]));
@@ -302,9 +484,9 @@ export function buildBoard3D(pcb: Pcb, opts: Board3DOptions = {}): Group {
   const top = t / 2;
   const bot = -t / 2;
   const tint = (c: number, f: number) => new Color(c).lerp(new Color(0xffffff), f).getHex();
-  const copperUnderMask = new MeshStandardMaterial({ color: tint(maskColor, opts.mask === 'black' ? 0.12 : 0.18), roughness: 0.4, metalness: 0.1, side: DoubleSide });
-  const gold = new MeshStandardMaterial({ color: COPPER_GOLD, roughness: 0.25, metalness: 0.85, side: DoubleSide });
-  const silk = new MeshStandardMaterial({ color: silkColor, roughness: 0.8, side: DoubleSide });
+  const copperUnderMask = new MeshPhysicalMaterial({ color: tint(maskColor, opts.mask === 'black' ? 0.1 : 0.16), roughness: 0.5, clearcoat: 0.8, clearcoatRoughness: 0.25, side: DoubleSide });
+  const gold = new MeshStandardMaterial({ color: COPPER_GOLD, roughness: 0.28, metalness: 1, side: DoubleSide });
+  const silk = new MeshStandardMaterial({ color: silkColor, roughness: 0.9, side: DoubleSide });
   const hole = new MeshStandardMaterial({ color: 0x0a0a0a, roughness: 1, side: DoubleSide });
 
   for (const side of ['F', 'B'] as const) {
@@ -346,7 +528,7 @@ export function buildBoard3D(pcb: Pcb, opts: Board3DOptions = {}): Group {
   }
 
   // Plated barrels for through-hole pads.
-  const barrel = new MeshStandardMaterial({ color: COPPER_GOLD, roughness: 0.3, metalness: 0.8, side: DoubleSide });
+  const barrel = new MeshStandardMaterial({ color: COPPER_GOLD, roughness: 0.3, metalness: 1, side: DoubleSide });
   for (const p of pads) {
     if (p.kind !== 'thru_hole' || !p.drill || p.drill.oval) continue;
     const off = rotate(p.drill.offset, p.rotation);
@@ -360,22 +542,19 @@ export function buildBoard3D(pcb: Pcb, opts: Board3DOptions = {}): Group {
   if (opts.components !== false) {
     const bodies = new Group();
     bodies.name = 'components';
-    const mats = new Map<number, MeshStandardMaterial>();
-    const mat = (c: number) => {
-      let m = mats.get(c);
-      if (!m) mats.set(c, (m = new MeshStandardMaterial({ color: c, roughness: 0.55, metalness: c === 0xbfc3c7 || c === 0xa9adb1 ? 0.7 : 0.05 })));
-      return m;
-    };
+    const mats = partMaterials();
+    // Like KiCad's own 3D view, a footprint without a 3D model gets no body (unfitted headers, pads-only parts).
+    // A board with no model references at all was stripped or is very old, so every part gets an approximation.
+    const anyModels = pcb.footprints.some((f) => f.models.length > 0);
     for (const fp of pcb.footprints) {
       if (SKIP_BODY.test(fp.libId) || fp.attrs.includes('board_only') || !fp.pads.length) continue;
+      if (anyModels && !fp.models.length) continue;
       const side = fp.layer.startsWith('B') ? 'B' : 'F';
-      const r = bodyRect(fp, side);
-      if (!r) continue;
-      const h = bodyHeight(fp);
-      const box = new Mesh(new BoxGeometry(r.w, r.h, h), mat(bodyColor(fp)));
-      box.position.set(r.cx, -r.cy, side === 'F' ? top + h / 2 + 0.02 : bot - h / 2 - 0.02);
-      box.userData = { reference: fp.reference, value: fp.value };
-      bodies.add(box);
+      const part = buildPart(fp, side, mats, t);
+      if (!part) continue;
+      part.position.set(fp.at.x, -fp.at.y, side === 'F' ? top : bot);
+      part.userData = { reference: fp.reference, value: fp.value };
+      bodies.add(part);
     }
     group.add(bodies);
   }

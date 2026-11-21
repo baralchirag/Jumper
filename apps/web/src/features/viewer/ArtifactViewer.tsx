@@ -6,6 +6,7 @@ import { Button, EmptyState, Flash, Input, PageSpinner, buttonClass } from '@jum
 import { downloadUrl, OUTPUT_KINDS, outputTitle, viewerKind } from '../checks/outputs';
 import { CodeView } from '../../shared/components/CodeView';
 import { formatBytes } from '../../shared/components/common';
+import { loadDesign } from './kicad';
 
 const Viewer3DPanel = lazy(() => import('./Viewer3DPanel').then((m) => ({ default: m.Viewer3DPanel })));
 
@@ -184,7 +185,36 @@ function TooLarge({ a }: { a: ArtifactInfo }) {
 }
 
 /** Inline preview of any check output, with open / download actions. */
-export function ArtifactViewer({ artifact: a, height = 'calc(100vh - 230px)', chrome = true }: { artifact: ArtifactInfo; height?: string; chrome?: boolean }) {
+/**
+ * kicad-cli's GLB with the board it came from, parsed in the browser: it gives untextured parts their finish and lets a
+ * click find the part or net under it. The board shares the project's name (KiCad requires it).
+ */
+function GlbView({ a, repo, height }: { a: ArtifactInfo; repo?: { owner: string; name: string }; height: string }) {
+  const path = a.projectPath.replace(/\.kicad_pro$/, '.kicad_pcb');
+  const design = useQuery({
+    queryKey: ['design', repo?.owner, repo?.name, a.sha, path],
+    queryFn: () => loadDesign(repo!.owner, repo!.name, a.sha, path),
+    enabled: Boolean(repo) && path.endsWith('.kicad_pcb'),
+    staleTime: Infinity,
+    retry: false,
+  });
+  // Wait briefly for the board so the model loads once with its finishes; without it the GLB still shows.
+  if (repo && design.isLoading) return <PageSpinner label="Loading 3D viewer…" />;
+  return <Viewer3DPanel key={a.id} glbUrl={a.url} pcb={design.data?.kind === 'pcb' ? design.data.model : null} height={height} />;
+}
+
+export function ArtifactViewer({
+  artifact: a,
+  height = 'calc(100vh - 230px)',
+  chrome = true,
+  repo,
+}: {
+  artifact: ArtifactInfo;
+  height?: string;
+  chrome?: boolean;
+  /** The repository the artifact belongs to; lets the 3D view load the board for picking. */
+  repo?: { owner: string; name: string };
+}) {
   const kind = viewerKind(a);
   const k = OUTPUT_KINDS[a.kind];
   const Icon = k?.icon ?? FileQuestion;
@@ -213,9 +243,14 @@ export function ArtifactViewer({ artifact: a, height = 'calc(100vh - 230px)', ch
       <div className="min-h-0 flex-1">
         {kind === 'pdf' && <iframe key={a.id} src={`${a.url}#view=FitH&toolbar=1`} title={outputTitle(a)} className="block w-full border-0 bg-canvas-inset" style={{ height }} />}
         {kind === 'image' && <ImageView a={a} height={height} />}
-        {(kind === '3d-glb' || kind === '3d-step') && (
+        {kind === '3d-glb' && (
           <Suspense fallback={<PageSpinner label="Loading 3D viewer…" />}>
-            <Viewer3DPanel key={a.id} glbUrl={kind === '3d-glb' ? a.url : null} stepUrl={kind === '3d-step' ? a.url : null} height={height} />
+            <GlbView a={a} repo={repo} height={height} />
+          </Suspense>
+        )}
+        {kind === '3d-step' && (
+          <Suspense fallback={<PageSpinner label="Loading 3D viewer…" />}>
+            <Viewer3DPanel key={a.id} stepUrl={a.url} height={height} />
           </Suspense>
         )}
         {kind === 'csv' && <CsvView a={a} height={height} />}

@@ -32,7 +32,7 @@ export function OutputsPage() {
 
   const outputs = useMemo(() => sortOutputs((q.data?.artifacts ?? []).filter(isOutput)), [q.data]);
   const projects = useMemo(() => [...new Set(outputs.map((o) => o.projectPath))], [outputs]);
-  const selected = outputs.find((o) => o.id === search.id) ?? outputs.find((o) => o.kind === 'pdf') ?? outputs[0];
+  const selected = outputs.find((o) => o.id === search.id) ?? outputs.find((o) => o.kind === 'glb') ?? outputs.find((o) => o.kind === 'pdf') ?? outputs[0];
   const select = (id: string) => void navigate({ to: '/$owner/$repo/outputs', params: { owner: info.owner, repo: info.name }, search: { ...search, id }, replace: true });
 
   if (info.isEmpty) return <EmptyState icon={<FolderDown size={24} />} title="No outputs yet">Push a KiCad project to generate fabrication files, PDFs and 3D models.</EmptyState>;
@@ -120,7 +120,7 @@ export function OutputsPage() {
                 <FabOrderLink fab={selected.meta.format} />
               </div>
             )}
-            {selected && <ArtifactViewer key={selected.id} artifact={selected} height="calc(100vh - 240px)" />}
+            {selected && <ArtifactViewer key={selected.id} artifact={selected} repo={{ owner: info.owner, name: info.name }} height="calc(100vh - 240px)" />}
           </section>
         </div>
       )}
