@@ -1,48 +1,157 @@
-import { useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRight, Plus } from 'lucide-react';
 import type { RepoInfo } from '@jumper/shared';
 import { Avatar, PageSpinner, buttonClass, cx } from '@jumper/ui';
-import { BoardDiff, BOARD, CHANGES, isShown, kindLabel, type Change } from './diff/BoardDiff';
-import reviewLight from './shots/review-light.webp';
-import reviewDark from './shots/review-dark.webp';
-import checksLight from './shots/checks-light.webp';
-import checksDark from './shots/checks-dark.webp';
-import fabLight from './shots/fab-light.webp';
-import fabDark from './shots/fab-dark.webp';
+import { BoardDiff, BOARD, CHANGES } from './diff/BoardDiff';
+import revB from './diff/assets/rev-b.webp';
+import renderMeta from './diff/assets/changes.json';
+import glbUrl from './live/assets/rev-b.glb?url';
+import board3dPoster from './live/assets/board-3d.webp';
+import type { Pcb } from '@jumper/kicad-core/types';
 import { RepoList } from '../../shared/components/RepoList';
 import { PageContainer } from '../../shared/components/common';
 import { api } from '../../shared/lib/api';
 import { useMe, wasSignedIn } from '../../shared/lib/queries';
 
-/** Screenshots of the real app (a pull request, the checks page, the outputs page), light and dark. */
-const PUSH = [
-  {
-    title: 'Review on the board',
-    body: 'Comment on a footprint, a pad or a track. Compare side by side, overlaid or swiped, matched by KiCad UUIDs rather than lines of text.',
-    slug: 'pull-requests',
-    shot: { light: reviewLight, dark: reviewDark, alt: 'A pull request in Jumper: the board before and after, with the added, removed and modified footprints listed beside it.' },
-  },
-  {
-    title: 'ERC and DRC on every push',
-    body: 'kicad-cli runs in a sandbox on each commit. Required checks keep a branch from merging until the design is clean.',
-    slug: 'jumper-yml',
-    shot: { light: checksLight, dark: checksDark, alt: 'The checks page: BOM, DRC, ERC, exports and renders for one commit, with the DRC errors expanded.' },
-  },
-  {
-    title: 'A fab package for every commit',
-    body: 'Gerbers, drill, BOM and pick-and-place in JLCPCB format, with live stock and price breaks from LCSC, Mouser and DigiKey.',
-    slug: 'releases',
-    shot: { light: fabLight, dark: fabDark, alt: 'The outputs page: the JLCPCB package, Gerbers, pick-and-place, BOM, PDFs and 3D files for a commit, with the board PDF open.' },
-  },
+/** What every commit gets; each links to the page in the docs that explains it. */
+const EVERY_COMMIT = [
+  { title: 'Visual diff', body: 'Parts, tracks, vias and zones matched by KiCad UUID. The board stays quiet; only the change is in colour.', slug: 'design-analysis' },
+  { title: 'Comments on parts', body: 'Pin a question to R6 or to an area of the board. Threads follow the part from commit to commit.', slug: 'design-analysis' },
+  { title: 'Renders and 3D', body: 'KiCad’s own renders, front and back, and a 3D board with the real part models from your library.', slug: 'design-analysis' },
+  { title: 'BOM and fab files', body: 'Priced parts from LCSC, JLCPCB, Mouser and DigiKey, and Gerbers, drill and pick-and-place ready to order.', slug: 'jumper-yml' },
 ] as const;
 
 const STEPS = [
-  { title: 'Commit the board.', body: 'Push over HTTPS or SSH, or straight from KiCad with the Jumper plugin.' },
-  { title: 'Review the change.', body: 'Every change shown on the board, comments pinned to parts, and checks that hold the merge until the design is clean.' },
+  { title: 'Connect GitHub.', body: 'Paste the repository URL. Jumper follows it from then on; nothing changes for your team.' },
+  { title: 'See the change.', body: 'Every commit checked and compared as a board, so a review takes minutes instead of a respin.' },
   { title: 'Order the panel.', body: 'Gerbers, drill, BOM and pick-and-place packaged for JLCPCB, PCBWay or OSH Park.' },
 ] as const;
+
+// The review window brings the WebGL viewer: its code arrives right after the hero paints.
+const LiveDemo = lazy(() => import('./live/LiveDemo').then((m) => ({ default: m.LiveDemo })));
+const Viewer3DPanel = lazy(() => import('../viewer/Viewer3DPanel').then((m) => ({ default: m.Viewer3DPanel })));
+
+function LiveSlot() {
+  // Start the demo as soon as the hero has painted, not when it scrolls into view: by the time a visitor reaches it,
+  // its ~1 MB of board data is already here.
+  const [go, setGo] = useState(false);
+  useEffect(() => {
+    const w = window as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    // After the review window, warm the 3D section: its code and kicad-cli's model, so it is ready on arrival.
+    const warm3d = () => {
+      void import('../viewer/Viewer3DPanel');
+      void fetch(glbUrl).catch(() => undefined);
+    };
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(() => setGo(true), { timeout: 800 });
+      const id2 = w.requestIdleCallback(warm3d, { timeout: 4000 });
+      return () => (w.cancelIdleCallback?.(id), w.cancelIdleCallback?.(id2));
+    }
+    const t = setTimeout(() => setGo(true), 200);
+    const t2 = setTimeout(warm3d, 2500);
+    return () => (clearTimeout(t), clearTimeout(t2));
+  }, []);
+  const frame = <div className="lp-rv lp-live-shimmer" style={{ height: 609 }} aria-hidden />;
+  return <div>{go ? <Suspense fallback={frame}><LiveDemo /></Suspense> : frame}</div>;
+}
+
+/** Fires once when the element comes within `margin` of the viewport. */
+function useNear<T extends HTMLElement>(margin = '400px') {
+  const ref = useRef<T>(null);
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || near) return;
+    const io = new IntersectionObserver((e) => e.some((x) => x.isIntersecting) && setNear(true), { rootMargin: `${margin} 0px` });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [near, margin]);
+  return [ref, near] as const;
+}
+
+/** kicad-cli's 3D export of Rev B, with KiCad's part models, turning slowly until someone grabs it. */
+function Board3D() {
+  const [ref, near] = useNear<HTMLDivElement>('1200px');
+  const [pcb, setPcb] = useState<Pcb | null>(null);
+  const [live, setLive] = useState(false);
+  useEffect(() => {
+    if (!near) return;
+    let off = false;
+    void import('./live/LiveDemo')
+      .then((m) => m.loadLiveData())
+      .then((d) => !off && d.b.kind === 'pcb' && setPcb(d.b.model))
+      .catch(() => undefined);
+    return () => {
+      off = true;
+    };
+  }, [near]);
+  return (
+    <div ref={ref} className="lp-3d">
+      {/* A still of the same view, so the section is never empty; the live board fades in over it. */}
+      <img src={board3dPoster} alt="" aria-hidden className={cx('lp-3d-poster', live && 'is-gone')} />
+      {near && pcb && (
+        <Suspense fallback={null}>
+          <div className={cx('lp-3d-live', live && 'is-on')}>
+            <Viewer3DPanel glbUrl={glbUrl} pcb={pcb} height={460} minimal onReady={() => setLive(true)} />
+          </div>
+        </Suspense>
+      )}
+      <p className="lp-3d-hint">Drag to turn it over</p>
+    </div>
+  );
+}
+
+/** A crop of KiCad's real render of Rev B around R6, with the area a reviewer selected and their thread. */
+function AnnotatedPart() {
+  const r6 = renderMeta.changes.find((c) => c.id === 'r6')!.box;
+  const d1 = renderMeta.changes.find((c) => c.id === 'd1')!.box;
+  const ratio = renderMeta.height / renderMeta.width;
+  // Frame the crop on R6 and D1 together, about a quarter of the board wide.
+  const span = 0.26;
+  const cx = (Math.min(r6[0]!, d1[0]!) + Math.max(r6[2]!, d1[2]!)) / 2;
+  const cy = (Math.min(r6[1]!, d1[1]!) + Math.max(r6[3]!, d1[3]!)) / 2;
+  const scale = 1 / span;
+  const aspect = 4 / 3; // crop width : height
+  const left = 50 - cx * scale * 100;
+  const top = 50 - cy * scale * ratio * aspect * 100;
+  const box = (b: number[]) => ({
+    left: `${left + b[0]! * scale * 100}%`,
+    top: `${top + b[1]! * scale * ratio * aspect * 100}%`,
+    width: `${(b[2]! - b[0]!) * scale * 100}%`,
+    height: `${(b[3]! - b[1]!) * scale * ratio * aspect * 100}%`,
+  });
+  const pad = 0.012;
+  const sel = [r6[0]! - pad, r6[1]! - pad / ratio / 2, r6[2]! + pad, r6[3]! + pad / ratio / 2];
+  return (
+    <figure className="lp-ann">
+      <div className="lp-ann-crop" style={{ aspectRatio: '4 / 3' }}>
+        <img src={revB} alt="KiCad render of the RoyalBlue54L Feather, close up on the status LED D1 and its resistor R6" style={{ position: 'absolute', width: `${scale * 100}%`, maxWidth: 'none', left: `${left}%`, top: `${top}%` }} />
+        <span className="lp-ann-sel" style={box(sel)}>
+          <span className="lp-ann-tag">R6</span>
+        </span>
+      </div>
+      <div className="lp-ann-thread">
+        <p className="flex items-baseline justify-between gap-3 text-[12.5px] text-[var(--lp-muted)]">
+          <span>
+            <span className="font-mono font-medium text-[var(--lp-ink)]">R6</span> · 470R → 1k
+          </span>
+          <span>Example thread</span>
+        </p>
+        <div className="mt-3">
+          <p className="text-[12.5px] font-medium">Reviewer</p>
+          <p className="mt-0.5 text-[14px] leading-relaxed">The status LED will be about half as bright at 3.3 V. Intended?</p>
+        </div>
+        <div className="mt-3 border-l border-[var(--lp-line)] pl-3">
+          <p className="text-[12.5px] font-medium">Designer</p>
+          <p className="mt-0.5 text-[14px] leading-relaxed">Yes, it was too bright behind the window. Resolving.</p>
+        </div>
+        <p className="lp-ann-resolved">Resolved on Rev B</p>
+      </div>
+    </figure>
+  );
+}
 
 function PrimaryCta({ className, label = 'Start a project' }: { className?: string; label?: string }) {
   return (
@@ -56,58 +165,18 @@ function PrimaryCta({ className, label = 'Start a project' }: { className?: stri
   );
 }
 
-/** The three things every push gets; hovering or focusing a row shows that screen from the app. */
-function PushShowcase() {
-  const [active, setActive] = useState(0);
-  return (
-    <div className="grid gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-14">
-      <ul className="border-t border-[var(--lp-ink)]">
-        {PUSH.map((n, i) => (
-          <li key={n.title} className="border-b border-[var(--lp-line)]">
-            <Link
-              to="/docs/$slug"
-              params={{ slug: n.slug }}
-              onMouseEnter={() => setActive(i)}
-              onFocus={() => setActive(i)}
-              aria-describedby="push-shot"
-              data-active={i === active || undefined}
-              className="lp-row group/row"
-            >
-              <span className="lp-row-title">{n.title}</span>
-              <span className="text-[15px] leading-relaxed text-[var(--lp-muted)]">{n.body}</span>
-              <ArrowUpRight size={20} aria-hidden className="lp-row-arrow" />
-            </Link>
-          </li>
-        ))}
-      </ul>
-      <figure id="push-shot" className="lp-shot lg:sticky lg:top-20 lg:self-start">
-        {PUSH.map((n, i) => (
-          <div key={n.title} className="lp-shot-frame" data-on={i === active || undefined} aria-hidden={i !== active}>
-            <img src={n.shot.light} alt={i === active ? n.shot.alt : ''} className="lp-shot-light" loading="lazy" decoding="async" />
-            <img src={n.shot.dark} alt={i === active ? n.shot.alt : ''} className="lp-shot-dark" loading="lazy" decoding="async" />
-          </div>
-        ))}
-        <figcaption className="mt-3 text-[13px] text-[var(--lp-muted)]">
-          {['A pull request', 'The checks page', 'The outputs page'][active]}, screenshotted from Jumper.
-        </figcaption>
-      </figure>
-    </div>
-  );
-}
-
 function Landing() {
   const [position, setPosition] = useState(0);
-  const reveal = (c: Change) => setPosition(Math.min(100, c.box[2]! * 100 + 3));
 
   return (
     <div className="lp">
-      {/* The specimen: the title, then the board at full width with the wipe under it. */}
+      {/* The review window, first: a real board, the change in colour, the list beside it, a thread on a part. */}
       <section className="lp-wrap pb-20 pt-14 md:pb-28 md:pt-20">
         <div className="grid items-end gap-x-12 gap-y-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,25rem)]">
           <h1 className="lp-title font-title">See what changed.</h1>
           <div className="lg:pb-3">
             <p className="text-pretty text-[17px] leading-relaxed text-[var(--lp-muted)]">
-              Git hosting for KiCad. Every commit is rendered, checked and compared as a board, so a review happens where the design is.
+              The KiCad companion for GitHub. Every commit drawn as a board, with only the change in colour, and comments pinned to the parts.
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
               <PrimaryCta />
@@ -119,52 +188,79 @@ function Landing() {
         </div>
 
         <div className="mt-12 md:mt-16">
-          <BoardDiff position={position} onChange={setPosition} />
+          <LiveSlot />
+          <p className="mt-4 text-[13px] text-[var(--lp-muted)]">
+            {BOARD.name} by {BOARD.author} · <span className="whitespace-nowrap">{BOARD.license}</span> ·{' '}
+            <a href={BOARD.url} target="_blank" rel="noreferrer" className="lp-link">
+              source
+            </a>
+            . Rev B is an example change made for this page; the diff is computed by the same engine that reads your commits.
+          </p>
         </div>
       </section>
 
-      {/* The change, itemised: each cell lights as the wipe passes it; clicking one wipes to it. */}
-      <section aria-labelledby="changes-h" className="border-t border-[var(--lp-line)]">
-        <div className="lp-wrap py-16 md:py-20">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2">
-            <h2 id="changes-h" className="text-[clamp(1.5rem,1.2rem+1vw,2rem)] font-medium tracking-[-0.02em]">
-              The same change, itemised
+      {/* Comments live on the board. */}
+      <section aria-labelledby="comment-h" className="border-t border-[var(--lp-line)]">
+        <div className="lp-wrap grid gap-x-16 gap-y-10 py-20 md:py-28 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:items-center">
+          <div>
+            <h2 id="comment-h" className="lp-h2">
+              Comment on the part, not the line.
             </h2>
-            <p className="text-sm text-[var(--lp-muted)]">
-              {BOARD.name} by {BOARD.author} · <span className="whitespace-nowrap">{BOARD.license}</span> ·{' '}
-              <a href={BOARD.url} target="_blank" rel="noreferrer" className="lp-link">
-                source
-              </a>
-              . Rev B is an example change made for this page.
+            <p className="mt-5 text-[16px] leading-relaxed text-[var(--lp-muted)]">
+              Click a part or drag over an area of the board, and ask. The thread stays pinned to R6 while the board changes around it, and closes when someone resolves it.
             </p>
           </div>
-          <ol className="mt-8 grid border-l border-t border-[var(--lp-line)] sm:grid-cols-2 lg:grid-cols-3">
-            {CHANGES.map((c) => {
-              const on = isShown(c, position);
-              return (
-                <li key={c.id} className="border-b border-r border-[var(--lp-line)]">
-                  <button type="button" onClick={() => reveal(c)} aria-pressed={on} data-kind={c.kind} className={cx('lp-cell', on && 'is-on')}>
-                    <span className="flex items-center justify-between font-mono text-[12.5px]">
-                      <span className="lp-kind">{kindLabel(c)}</span>
-                      <span className="text-[var(--lp-muted)]">{c.ref}</span>
-                    </span>
-                    <span className="mt-6 block text-[19px] font-medium leading-snug tracking-[-0.01em]">{c.title}</span>
-                    <span className="mt-2 block text-[14px] leading-relaxed text-[var(--lp-muted)]">{c.detail}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
+          <AnnotatedPart />
         </div>
       </section>
 
-      {/* What else every push gets, set as type rather than cards. */}
-      <section aria-labelledby="push-h" className="border-t border-[var(--lp-line)]">
+      {/* Board previews: KiCad's own renders, then the 3D board. */}
+      <section aria-labelledby="render-h" className="border-t border-[var(--lp-line)]">
         <div className="lp-wrap py-20 md:py-28">
-          <h2 id="push-h" className="mb-10 text-[clamp(1.5rem,1.2rem+1vw,2rem)] font-medium leading-tight tracking-[-0.02em] md:mb-14">
-            And on every push
+          <div className="mb-10 grid gap-x-12 gap-y-4 md:mb-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-end">
+            <h2 id="render-h" className="lp-h2">
+              Every commit, rendered the way it will be built.
+            </h2>
+            <p className="text-[15px] leading-relaxed text-[var(--lp-muted)]">
+              kicad-cli renders the real soldermask, silkscreen and parts on every push. Drag across this one to wipe from Rev A to Rev B.
+            </p>
+          </div>
+          <BoardDiff position={position} onChange={setPosition} />
+          <p className="mt-4 text-[13px] text-[var(--lp-muted)]">
+            {CHANGES.length} changes between the two renders. KiCad ray-traced both; nothing is retouched.
+          </p>
+
+          <div className="mt-16 grid gap-x-16 gap-y-8 md:mt-24 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-center">
+            <Board3D />
+            <div>
+              <h3 className="text-[clamp(1.4rem,1.1rem+1vw,1.9rem)] font-medium leading-tight tracking-[-0.025em]">The same board in 3D, with the parts that will be on it.</h3>
+              <p className="mt-4 text-[15px] leading-relaxed text-[var(--lp-muted)]">
+                KiCad’s 3D export with the models from your library: the USB-C shell, the module shield, every 0402. Turn it over to check the back before you order.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* What every commit gets, set as type rather than cards. */}
+      <section aria-labelledby="every-h" className="border-t border-[var(--lp-line)]">
+        <div className="lp-wrap py-16 md:py-20">
+          <h2 id="every-h" className="mb-8 text-[clamp(1.5rem,1.2rem+1vw,2rem)] font-medium tracking-[-0.02em]">
+            On every commit, automatically
           </h2>
-          <PushShowcase />
+          <ul className="grid border-l border-t border-[var(--lp-line)] sm:grid-cols-2 lg:grid-cols-4">
+            {EVERY_COMMIT.map((f) => (
+              <li key={f.title} className="border-b border-r border-[var(--lp-line)]">
+                <Link to="/docs/$slug" params={{ slug: f.slug }} className="lp-every group/every">
+                  <span className="flex items-center justify-between text-[19px] font-medium tracking-[-0.01em]">
+                    {f.title}
+                    <ArrowUpRight size={18} aria-hidden className="lp-row-arrow" />
+                  </span>
+                  <span className="mt-3 block text-[14px] leading-relaxed text-[var(--lp-muted)]">{f.body}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
@@ -196,6 +292,7 @@ function Landing() {
             </div>
             <p className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
               <span>KiCad 8 and 9</span>
+              <span>GitHub, GitLab and any git host</span>
             </p>
           </div>
         </div>
@@ -262,35 +359,82 @@ const LANDING_CSS = `
 .lp-wipe:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px var(--lp-paper), 0 0 0 6px var(--lp-ink); }
 .lp-wipe:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 4px var(--lp-paper), 0 0 0 6px var(--lp-ink); }
 
-/* Itemised changes */
-.lp-cell { display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 22px 22px 26px; text-align: left; color: var(--lp-muted);
-  background: transparent; cursor: pointer; transition: background-color .3s var(--ease-route), color .3s var(--ease-route); }
-.lp-cell:hover { background: color-mix(in srgb, var(--lp-ink) 4%, transparent); }
-.lp-cell.is-on { color: var(--lp-ink); }
-.lp-kind { display: inline-flex; align-items: center; gap: 8px; }
-.lp-kind::before { content: ''; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--lp-muted); transition: all .3s var(--ease-route); }
-.lp-cell.is-on .lp-kind::before { background: var(--lp-accent); border-color: var(--lp-accent); }
-.lp-cell.is-on[data-kind='added'] .lp-kind::before { background: var(--lp-add); border-color: var(--lp-add); }
-.lp-cell.is-on[data-kind='removed'] .lp-kind::before { background: var(--lp-del); border-color: var(--lp-del); }
-
-/* Push rows */
-.lp-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 24px; padding: 26px 4px 26px 18px; color: var(--lp-ink); text-decoration: none; align-items: baseline; }
-.lp-row > :nth-child(2) { grid-column: 1; }
-.lp-row > .lp-row-arrow { grid-column: 2; grid-row: 1; }
-.lp-row::before { content: ''; position: absolute; left: 0; top: 22px; bottom: 22px; width: 3px; background: var(--lp-accent); transform: scaleY(0); transform-origin: top; transition: transform .35s var(--ease-route); }
-.lp-row[data-active]::before { transform: scaleY(1); }
-.lp-row-title { font-size: clamp(1.3rem, 1.1rem + .8vw, 1.75rem); font-weight: 500; line-height: 1.15; letter-spacing: -0.025em; }
-.lp-row:not([data-active]) .lp-row-title { color: var(--lp-muted); }
-.lp-shot { position: relative; }
-.lp-shot-frame { border: 1px solid var(--lp-line); border-radius: 8px; overflow: hidden; background: var(--pcb-canvas); box-shadow: 0 30px 60px -40px rgba(0,0,0,.45); }
-.lp-shot-frame:not([data-on]) { position: absolute; inset: 0 0 auto 0; opacity: 0; pointer-events: none; }
-.lp-shot-frame { transition: opacity .35s var(--ease-route); }
-.lp-shot-frame img { display: block; width: 100%; height: auto; }
-.lp-shot-dark { display: none !important; }
-:root[data-theme='dark'] .lp-shot-light { display: none !important; }
-:root[data-theme='dark'] .lp-shot-dark { display: block !important; }
+/* What every commit gets */
+.lp-every { display: block; height: 100%; padding: 22px 22px 26px; color: var(--lp-ink); text-decoration: none; transition: background-color .3s var(--ease-route); }
+.lp-every:hover { background: color-mix(in srgb, var(--lp-ink) 4%, transparent); }
 .lp-row-arrow { color: var(--lp-muted); transition: color .25s, translate .3s var(--ease-route); }
-.lp-row:hover .lp-row-arrow { color: var(--lp-accent-ink); translate: 3px -3px; }
+.lp-every:hover .lp-row-arrow { color: var(--lp-accent-ink); translate: 3px -3px; }
+
+/* Review window: the app's own viewer in review mode, the change list and threads beside it. */
+.lp-h2 { font-size: clamp(1.9rem, 1.2rem + 2.2vw, 3.25rem); font-weight: 500; line-height: 1.02; letter-spacing: -0.03em; text-wrap: balance; }
+.lp-live-shimmer { background: linear-gradient(100deg, var(--pcb-canvas) 40%, color-mix(in srgb, var(--pcb-canvas) 92%, var(--lp-ink)) 50%, var(--pcb-canvas) 60%) 0 0 / 300% 100%; animation: lp-shimmer 1.6s linear infinite; }
+@keyframes lp-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .lp-live-shimmer { animation: none; } }
+.lp-rv { border: 1px solid var(--lp-line); border-radius: 8px; overflow: hidden; background: var(--pcb-canvas); box-shadow: 0 24px 48px -36px rgba(0,0,0,.4); }
+.lp-rv-file { min-width: 0; }
+@media (max-width: 640px) { .lp-rv-file { display: none; } .lp-rv-seg { margin-left: 0 !important; width: 100%; } .lp-rv-seg button { flex: 1; } }
+.lp-rv-bar { display: flex; align-items: center; gap: 16px; height: 48px; padding: 0 8px 0 16px; border-bottom: 1px solid var(--lp-line); background: var(--pcb-canvas-subtle); }
+.lp-rv-seg { display: inline-flex; padding: 3px; border-radius: 6px; background: color-mix(in srgb, var(--lp-ink) 7%, transparent); }
+.lp-rv-seg button { height: 30px; padding: 0 12px; white-space: nowrap; border-radius: 4px; font-size: 13.5px; font-weight: 500; color: var(--lp-muted); transition: color .2s, background-color .2s; }
+.lp-rv-seg button:hover { color: var(--lp-ink); }
+.lp-rv-seg button[aria-checked='true'] { background: var(--pcb-canvas); color: var(--lp-ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.lp-rv-body { display: grid; }
+@media (min-width: 1024px) { .lp-rv-body { grid-template-columns: minmax(0, 1fr) 340px; } }
+.lp-rv-side { display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--lp-line); background: var(--pcb-canvas); }
+@media (min-width: 1024px) { .lp-rv-side { height: 560px; border-top: 0; border-left: 1px solid var(--lp-line); } }
+@media (max-width: 1023px) { .lp-rv-side { max-height: 520px; } }
+.lp-rv-tabs { display: flex; gap: 4px; padding: 0 8px; border-bottom: 1px solid var(--lp-line); }
+.lp-rv-tabs button { position: relative; height: 44px; padding: 0 10px; font-size: 14px; font-weight: 500; color: var(--lp-muted); }
+.lp-rv-tabs button[aria-selected='true'] { color: var(--lp-ink); }
+.lp-rv-tabs button[aria-selected='true']::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; background: var(--lp-accent-ink); }
+.lp-rv-count { margin-left: 4px; padding: 0 6px; border-radius: 9px; font: 500 11.5px/18px "JetBrains Mono Variable", ui-monospace, monospace; background: color-mix(in srgb, var(--lp-ink) 8%, transparent); }
+/* The homepage board's change colours (LOOKS.board in @jumper/viewer). */
+.lp { --rv-add: #5be37d; --rv-del: #ff5a5f; --rv-mod: #ff8f3a; --rv-net: #ffffff; }
+.lp-rv-row { display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 11px 16px; text-align: left; border-bottom: 1px solid var(--lp-line); transition: background-color .15s; }
+.lp-rv-row:hover { background: color-mix(in srgb, var(--lp-ink) 4%, transparent); }
+.lp-rv-row.is-on { background: color-mix(in srgb, var(--rv-mod) 14%, transparent); }
+.lp-rv-row[data-op='added'].is-on { background: color-mix(in srgb, var(--rv-add) 12%, transparent); }
+.lp-rv-row[data-op='removed'].is-on { background: color-mix(in srgb, var(--rv-del) 10%, transparent); }
+.lp-rv-dot { flex: none; width: 9px; height: 9px; margin-top: 5px; border-radius: 2px; background: var(--rv-mod); box-shadow: 0 0 0 1px color-mix(in srgb, #121314 25%, transparent); }
+[data-op='added'] > .lp-rv-dot { background: var(--rv-add); }
+[data-op='removed'] > .lp-rv-dot { background: var(--rv-del); }
+.lp-rv-mini { display: flex; align-items: center; gap: 10px; width: 100%; padding: 5px 0; text-align: left; font: 500 12.5px/1.4 "JetBrains Mono Variable", ui-monospace, monospace; color: var(--lp-muted); }
+.lp-rv-mini:hover { color: var(--lp-ink); }
+.lp-rv-mini .lp-rv-dot { margin-top: 0; }
+.lp-rv-net { width: 14px; height: 4px; border-radius: 2px; background: var(--rv-net); box-shadow: 0 0 0 1px rgb(0 0 0 / .35); }
+.lp-rv-thread { padding: 14px 16px 16px; border-bottom: 1px solid var(--lp-line); }
+.lp-rv-compose { padding: 12px 16px 14px; border-top: 1px solid var(--lp-line); background: var(--pcb-canvas-subtle); }
+.lp-rv-input { flex: 1; min-width: 0; height: 34px; padding: 0 10px; border: 1px solid var(--lp-line); border-radius: 6px; background: var(--pcb-canvas); font-size: 14px; color: var(--lp-ink); }
+.lp-rv-input:focus { outline: none; border-color: var(--lp-accent-ink); }
+.lp-rv-send { height: 34px; padding: 0 12px; border-radius: 4px; background: var(--lp-accent); color: var(--lp-edge); font-size: 13.5px; font-weight: 500; }
+.lp-rv-send:disabled { opacity: .45; }
+.lp-rv-legend { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 14px; padding: 6px 10px; border-radius: 4px; background: color-mix(in srgb, var(--pcb-canvas) 88%, transparent); font-size: 12.5px; color: var(--lp-muted); pointer-events: none; }
+.lp-rv-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.lp-rv-legend span::before { content: ''; width: 9px; height: 9px; border-radius: 2px; background: var(--rv-mod); }
+.lp-rv-legend [data-op='added']::before { background: var(--rv-add); }
+.lp-rv-legend [data-op='removed']::before { background: var(--rv-del); }
+.lp-rv-fit { position: absolute; right: 12px; top: 12px; display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--lp-line); border-radius: 6px; background: var(--pcb-canvas); color: var(--lp-muted); }
+.lp-rv-fit:hover { color: var(--lp-ink); }
+
+/* Comment on the part: a crop of KiCad's render, the selected area, the thread. */
+.lp-ann { position: relative; display: grid; gap: 0; }
+@media (min-width: 768px) { .lp-ann { grid-template-columns: minmax(0, 1fr) 300px; align-items: center; } }
+.lp-ann-crop { position: relative; overflow: hidden; border-radius: 8px; background: #0c2340; }
+.lp-ann-sel { position: absolute; border: 2px solid var(--lp-accent); border-radius: 4px; background: color-mix(in srgb, var(--lp-accent) 14%, transparent); box-shadow: 0 0 0 1.5px var(--lp-edge), inset 0 0 0 1.5px var(--lp-edge); }
+.lp-ann-tag { position: absolute; left: -2px; bottom: calc(100% + 6px); padding: 1px 7px; border-radius: 3px; background: var(--lp-accent); color: var(--lp-edge); box-shadow: 0 0 0 1.5px var(--lp-edge); font: 500 12px/18px "JetBrains Mono Variable", ui-monospace, monospace; }
+.lp-ann-thread { position: relative; padding: 18px 20px 20px; border: 1px solid var(--lp-line); border-radius: 8px; background: var(--pcb-canvas); box-shadow: 0 30px 60px -40px rgba(0,0,0,.45); }
+@media (min-width: 768px) { .lp-ann-thread { margin-left: -48px; } }
+@media (max-width: 767px) { .lp-ann-thread { margin: -28px 12px 0; } }
+.lp-ann-resolved { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--lp-line); font-size: 12.5px; color: var(--lp-muted); display: flex; align-items: center; gap: 8px; }
+.lp-ann-resolved::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--rv-add); }
+
+/* 3D */
+.lp-3d { position: relative; min-height: 460px; border-radius: 8px; background: radial-gradient(120% 90% at 50% 40%, var(--pcb-canvas) 0%, var(--pcb-canvas-subtle) 70%); border: 1px solid var(--lp-line); overflow: hidden; }
+.lp-3d-poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transition: opacity .6s var(--ease-route); }
+.lp-3d-poster.is-gone { opacity: 0; }
+.lp-3d-live { position: relative; opacity: 0; transition: opacity .6s var(--ease-route); }
+.lp-3d-live.is-on { opacity: 1; }
+.lp-3d-hint { position: absolute; left: 16px; bottom: 14px; font-size: 12.5px; color: var(--lp-muted); pointer-events: none; }
 
 /* Close: a field of the accent colour, ink on top. */
 .lp-close { --lp-ink: #121314; --lp-paper: #f1f2ef; --lp-muted: #3d3f42; background: var(--lp-accent); color: var(--lp-ink); }

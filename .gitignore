@@ -26,3 +26,5 @@ apps/web/.impeccable/
 /design.txt
 /jumper-logo.svg
 /jumper-logo-dark.svg
+
+__pycache__/
