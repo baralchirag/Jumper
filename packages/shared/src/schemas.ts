@@ -171,6 +171,8 @@ export const objectAnchorSchema = z.object({
   layer: z.string().max(60).optional(),
   x: z.number().optional(),
   y: z.number().optional(),
+  /** An area of the board (objectType "region"): minX, minY, maxX, maxY in mm. */
+  bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]).optional(),
 });
 
 export const lineAnchorSchema = z.object({

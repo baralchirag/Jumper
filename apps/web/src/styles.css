@@ -32,3 +32,26 @@
 @keyframes nav-progress { 0% { transform: scaleX(0); } 70% { transform: scaleX(0.85); } 100% { transform: scaleX(0.95); } }
 .nav-progress { transform-origin: left; animation: nav-progress 1.6s cubic-bezier(.2,.7,0,1) both; }
 @media (prefers-reduced-motion: reduce) { .nav-progress { animation: none; transform: scaleX(0.6); } }
+
+/* Review workspace (VisualDiff): the change list and threads beside the board, in the board's diff colours. */
+.rv { --rv-add: #1f883d; --rv-del: #cf222e; --rv-mod: #e0a800; }
+[data-theme='dark'] .rv { --rv-add: #3fb950; --rv-del: #f85149; --rv-mod: #ffd60a; }
+.rv-dot { flex: none; width: 9px; height: 9px; margin-top: 4px; border-radius: 2px; background: var(--rv-mod); box-shadow: 0 0 0 1px rgb(18 19 20 / .25); }
+[data-op='added'] .rv-dot { background: var(--rv-add); }
+[data-op='removed'] .rv-dot { background: var(--rv-del); }
+.rv-row { border-bottom: 1px solid var(--pcb-border-muted); transition: background-color .15s; }
+.rv-row:hover { background: color-mix(in srgb, var(--pcb-fg) 4%, transparent); }
+.rv-row.is-on { background: color-mix(in srgb, var(--rv-mod) 14%, transparent); }
+.rv-row[data-op='added'].is-on { background: color-mix(in srgb, var(--rv-add) 12%, transparent); }
+.rv-row[data-op='removed'].is-on { background: color-mix(in srgb, var(--rv-del) 10%, transparent); }
+.rv-tab { position: relative; height: 40px; padding: 0 8px; font-size: 13.5px; font-weight: 500; color: var(--pcb-fg-muted); }
+.rv-tab[aria-selected='true'] { color: var(--pcb-fg); }
+.rv-tab[aria-selected='true']::after { content: ''; position: absolute; left: 6px; right: 6px; bottom: -1px; height: 2px; background: var(--pcb-select); }
+.rv-count { margin-left: 4px; padding: 0 6px; border-radius: 9px; font: 500 11.5px/18px "JetBrains Mono Variable", ui-monospace, monospace; background: color-mix(in srgb, var(--pcb-fg) 8%, transparent); }
+.rv-legend { display: inline-flex; align-items: center; gap: 6px; color: var(--pcb-fg-muted); }
+.rv-legend::before { content: ''; width: 9px; height: 9px; border-radius: 2px; background: var(--rv-mod); }
+.rv-legend[data-op='added']::before { background: var(--rv-add); }
+.rv-legend[data-op='removed']::before { background: var(--rv-del); }
+.rv-side-label { padding: 4px 12px; border-bottom: 1px solid var(--pcb-border); background: var(--pcb-canvas-subtle); font-size: 12px; font-weight: 500; color: var(--pcb-fg-muted); }
+.rv-chip { position: absolute; top: 8px; padding: 1px 6px; border-radius: 3px; background: rgb(18 19 20 / .7); color: #fff; font-size: 12px; pointer-events: none; }
+.rv-area { position: absolute; border: 2px solid var(--pcb-accent-emphasis); border-radius: 3px; background: color-mix(in srgb, var(--pcb-accent-emphasis) 14%, transparent); box-shadow: 0 0 0 1.5px #121314, inset 0 0 0 1.5px #121314; pointer-events: none; }

@@ -304,6 +304,28 @@ export const comments = pgTable(
   (t) => [index('comments_pull_idx').on(t.pullId)],
 );
 
+/**
+ * Comments on a commit's design, pinned to a part (by KiCad UUID, so the thread follows the part to later commits)
+ * or to an area of the board. Replies point at their thread's first comment.
+ */
+export const commitComments = pgTable(
+  'commit_comments',
+  {
+    id: id(),
+    repoId: uuid('repo_id').notNull().references(() => repositories.id, { onDelete: 'cascade' }),
+    path: text('path').notNull(),
+    commitSha: text('commit_sha').notNull(),
+    authorId: uuid('author_id').notNull().references(() => users.id),
+    inReplyTo: uuid('in_reply_to'),
+    body: text('body').notNull(),
+    anchor: jsonb('anchor').$type<CommentAnchor>(),
+    resolved: boolean('resolved').notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('commit_comments_repo_path_idx').on(t.repoId, t.path)],
+);
+
 export const pullEvents = pgTable(
   'pull_events',
   {
@@ -398,6 +420,7 @@ export type OrgInvite = typeof orgInvites.$inferSelect;
 export type Repository = typeof repositories.$inferSelect;
 export type PullRequest = typeof pullRequests.$inferSelect;
 export type Comment = typeof comments.$inferSelect;
+export type CommitComment = typeof commitComments.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
 export type CheckRun = typeof checkRuns.$inferSelect;
 export type Artifact = typeof artifacts.$inferSelect;

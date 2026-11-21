@@ -15,6 +15,7 @@
 //   search                    search across repos, parts, nets
 //   downloads, embeds         tools served by the instance; README badges and board previews
 //   alerts, compliance        BOM stock/end-of-life watches; RoHS/REACH roll-up
+//   comments                  comments on a commit's design, pinned to parts or areas
 //   sso, scim, policy         single sign-on, directory provisioning, roles and organization-wide policy
 //   billing, instance         invoice billing; licence, legal holds, retention and version
 //   referrals                 invite links
@@ -47,6 +48,7 @@ import usageRoutes from './usage/routes';
 import userRoutes from './user/routes';
 import webhookRoutes from './webhooks/routes';
 import alertRoutes from './alerts/routes';
+import commentRoutes from './comments/routes';
 import complianceRoutes from './compliance/routes';
 import ssoRoutes from './sso/routes';
 import scimRoutes from './scim/routes';
@@ -84,6 +86,7 @@ export async function registerModules(app: FastifyInstance): Promise<void> {
   await app.register(usageRoutes, { prefix: '/api' });
   await app.register(webhookRoutes, { prefix: '/api' });
   await app.register(alertRoutes, { prefix: '/api' });
+  await app.register(commentRoutes, { prefix: '/api' });
   await app.register(complianceRoutes, { prefix: '/api' });
   await app.register(ssoRoutes, { prefix: '/api' });
   await app.register(scimRoutes, { prefix: '/api/scim/v2' });
