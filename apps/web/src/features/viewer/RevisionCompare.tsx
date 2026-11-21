@@ -76,7 +76,7 @@ export function RevisionCompare({
       {baseSha === headSha ? (
         <EmptyState title="Same revision on both sides">Pick two different versions to compare.</EmptyState>
       ) : (
-        <VisualDiff key={`${baseSha}..${headSha}`} owner={owner} repo={repo} path={path} baseSha={baseSha} headSha={headSha} height={640} />
+        <VisualDiff key={`${baseSha}..${headSha}`} owner={owner} repo={repo} path={path} baseSha={baseSha} headSha={headSha} height={860} />
       )}
     </div>
   );

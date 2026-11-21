@@ -21,6 +21,7 @@ import { SvgViewer } from '../viewer/SvgViewer';
 import { Breadcrumbs, ErrorView, formatBytes } from '../../shared/components/common';
 import { api, errorMessage, rawUrl, repoPath } from '../../shared/lib/api';
 import { loadDesign } from '../viewer/kicad';
+import { VIEWER_HEIGHT } from '../viewer/layout';
 import { resolveRelative } from '../../shared/lib/markdown';
 import { keys, useChecks } from '../../shared/lib/queries';
 import { useRepoInfo } from './context';
@@ -67,7 +68,7 @@ function InteractiveView({ owner, repo, sha, path, search }: { owner: string; re
 
   if (design.isLoading) {
     return (
-      <div className="flex h-[70vh] items-center justify-center gap-2 text-fg-muted">
+      <div className="flex items-center justify-center gap-2 text-fg-muted" style={{ height: VIEWER_HEIGHT }}>
         <Spinner /> Parsing design…
       </div>
     );
@@ -78,7 +79,7 @@ function InteractiveView({ owner, repo, sha, path, search }: { owner: string; re
     <DesignViewer
       ref={viewer}
       design={design.data!}
-      height="calc(100vh - 260px)"
+      height={VIEWER_HEIGHT}
       markers={markers}
       onOpenSheet={(file) => void navigate({ to: '/$owner/$repo/blob/$ref/$', params: { owner, repo, ref: sha, _splat: resolveRelative(dir, file) } })}
       toolbar={markers.length ? <span className="mr-2 text-xs text-danger">{markers.length} violation markers</span> : undefined}
@@ -177,7 +178,7 @@ export function BlobPage() {
               options={[
                 { value: 'view', label: 'Interactive', icon: <CircuitBoard size={12} /> },
                 { value: 'compare', label: 'Compare versions', icon: <ArrowLeftRight size={12} /> },
-                { value: 'render', label: 'KiCad render', icon: <Image size={12} />, disabled: !svgs.length },
+                ...(svgs.length ? [{ value: 'render' as Tab, label: 'KiCad render', icon: <Image size={12} /> }] : []),
                 ...(kind === 'pcb' ? [{ value: 'fab' as Tab, label: 'Fab check', icon: <Gauge size={12} /> }] : []),
                 ...(kind === 'sch' ? [{ value: 'bom' as Tab, label: 'BOM', icon: <Package size={12} /> }, { value: 'firmware' as Tab, label: 'Firmware', icon: <Cpu size={12} /> }] : []),
                 { value: 'source', label: 'Source', icon: <Code size={12} /> },
@@ -231,7 +232,7 @@ export function BlobPage() {
           (artifacts.isLoading ? (
             <PageSpinner />
           ) : svgs.length ? (
-            <SvgViewer key={b.sha} artifacts={svgs} kind={kind === 'pcb' ? 'pcb' : 'sch'} height="calc(100vh - 260px)" />
+            <SvgViewer key={b.sha} artifacts={svgs} kind={kind === 'pcb' ? 'pcb' : 'sch'} height={VIEWER_HEIGHT} />
           ) : (
             <EmptyState icon={<Image size={32} />} title="No KiCad render yet">
               Renders are produced by the Render check. They appear here once it completes.
@@ -274,7 +275,7 @@ export function BlobPage() {
                 />
               </div>
             )}
-            {b.text !== null && (!isMarkdown || mdSource) && <CodeView text={b.text} path={path} maxHeight="calc(100vh - 260px)" />}
+            {b.text !== null && (!isMarkdown || mdSource) && <CodeView text={b.text} path={path} maxHeight={VIEWER_HEIGHT} />}
           </>
         )}
       </Box>

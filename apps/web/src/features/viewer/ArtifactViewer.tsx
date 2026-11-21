@@ -7,6 +7,7 @@ import { downloadUrl, OUTPUT_KINDS, outputTitle, viewerKind } from '../checks/ou
 import { CodeView } from '../../shared/components/CodeView';
 import { formatBytes } from '../../shared/components/common';
 import { loadDesign } from './kicad';
+import { VIEWER_HEIGHT } from './layout';
 
 const Viewer3DPanel = lazy(() => import('./Viewer3DPanel').then((m) => ({ default: m.Viewer3DPanel })));
 
@@ -205,7 +206,7 @@ function GlbView({ a, repo, height }: { a: ArtifactInfo; repo?: { owner: string;
 
 export function ArtifactViewer({
   artifact: a,
-  height = 'calc(100vh - 230px)',
+  height = VIEWER_HEIGHT,
   chrome = true,
   repo,
 }: {

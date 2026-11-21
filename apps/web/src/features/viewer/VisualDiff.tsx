@@ -205,7 +205,7 @@ export function VisualDiff({
   oldPath,
   baseSha,
   headSha,
-  height = 620,
+  height = 760,
 }: {
   owner: string;
   repo: string;

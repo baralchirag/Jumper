@@ -9,6 +9,9 @@ export function fitHeight(height: number | string): string | number {
   return `min(${height}px, calc(100svh - 7rem))`;
 }
 
+/** Height for a page built around one viewer: big enough to work in, filling the window once scrolled to it. */
+export const VIEWER_HEIGHT = 'max(560px, calc(100vh - 150px))';
+
 /** True on touch-first devices, for "tap" instead of "click" and larger hit areas. */
 export function useCoarsePointer(): boolean {
   const query = '(pointer: coarse)';

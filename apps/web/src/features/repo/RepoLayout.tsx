@@ -21,7 +21,7 @@ export function RepoLayout() {
     rest.startsWith('/compare') ? 'compare' : rest.startsWith('/checks') ? 'checks' : rest.startsWith('/outputs') ? 'outputs' : rest.startsWith('/parts') || rest.startsWith('/bom-alerts') ? 'parts' : rest.startsWith('/settings') ? 'settings' : 'code';
 
   // Pages built around a big viewer get more width.
-  const wide = section === 'outputs' || rest.startsWith('/blob/');
+  const wide = section === 'outputs' || section === 'compare' || rest.startsWith('/blob/') || rest.startsWith('/commit/');
   const width = wide ? 'max-w-[1680px]' : undefined;
 
   const items: NavItem[] = [

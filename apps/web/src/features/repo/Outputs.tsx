@@ -14,6 +14,7 @@ import { downloadUrl, isOutput, OUTPUT_GROUPS, OUTPUT_KINDS, outputTitle, sortOu
 import { keys, useChecks } from '../../shared/lib/queries';
 import { loadDesign } from '../viewer/kicad';
 import type { Source3D } from '../viewer/Viewer3DPanel';
+import { VIEWER_HEIGHT } from '../viewer/layout';
 import { useRepoInfo } from './context';
 import { FabOrderLink, isOrderableFab } from '../checks/FabOrder';
 import { MissingFiles, useDesigns } from './MissingFiles';
@@ -21,8 +22,6 @@ import { MissingFiles, useDesigns } from './MissingFiles';
 // three.js and OpenCascade load only when a 3D view is shown.
 const Viewer3DPanel = lazy(() => import('../viewer/Viewer3DPanel').then((m) => ({ default: m.Viewer3DPanel })));
 
-/** Big enough to work in: the viewer fills the window once the page is scrolled to it. */
-export const VIEWER_HEIGHT = 'max(560px, calc(100vh - 150px))';
 
 export function useOutputs(owner: string, repo: string, sha: string | undefined) {
   return useQuery({
@@ -68,7 +67,7 @@ function buildEntries(outputs: ArtifactInfo[], projects: string[], pcbs: Map<str
     if (pcbs.has(p) || glb || step) {
       out.push({ key: `3d:${p}`, type: '3d', group: '3D', project: p, source: glb ? 'glb' : step && !pcbs.has(p) ? 'step' : 'board', title: '3D view', sub: glb ? 'Real part models · turn, zoom, click parts' : 'Quick preview from your board file', thumb: iso?.url });
     }
-    if (renders.length) out.push({ key: `renders:${p}`, type: '3d', group: '3D', project: p, source: 'renders', title: 'Ray-traced images', sub: `${renders.length} angles from KiCad's renderer`, thumb: iso?.url });
+    if (renders.length) out.push({ key: `renders:${p}`, type: '3d', group: '3D', project: p, source: 'renders', title: 'Ray-traced images', sub: `${renders.length} ${renders.length === 1 ? 'angle' : 'angles'} from KiCad's renderer`, thumb: iso?.url });
     if (step) out.push({ key: `step:${p}`, type: '3d', group: '3D', project: p, source: 'step', title: 'STEP model', sub: `${formatBytes(step.size)} · for mechanical CAD`, download: step });
     if (glb) out.push({ key: `glb:${p}`, type: '3d', group: '3D', project: p, source: 'glb', title: 'GLB model', sub: `${formatBytes(glb.size)} · for the web and Blender`, download: glb });
     for (const a of mine) {

@@ -22,7 +22,7 @@ export function ProjectHero({ owner, repo, gitRef, sha, runs }: { owner: string;
   const fab = arts.find((a) => a.kind === 'fab_package');
   const bom = arts.find((a) => a.kind === 'bom' && a.name.endsWith('.json'));
   const name = (pcb ?? sch)!.split('/').pop()!.replace(/\.kicad_(pcb|sch)$/, '');
-  const ext = (to: 'view' | 'bom', path: string) => ({ to: '/$owner/$repo/blob/$ref/$' as const, params: { owner, repo, ref: gitRef, _splat: path }, search: { tab: to } });
+  const ext = (to: 'view', path: string) => ({ to: '/$owner/$repo/blob/$ref/$' as const, params: { owner, repo, ref: gitRef, _splat: path }, search: { tab: to } });
   // 3D lives in one place: Outputs, where the quick preview, KiCad's model and the ray-traced images share one viewer.
   const in3d = (path: string) => ({ to: '/$owner/$repo/outputs' as const, params: { owner, repo }, search: { sha, id: `3d:${path.replace(/\.kicad_pcb$/i, '')}` } });
 
@@ -78,7 +78,7 @@ export function ProjectHero({ owner, repo, gitRef, sha, runs }: { owner: string;
             </Link>
           )}
           {sch && (
-            <Link {...ext('bom', sch)} className={tile}>
+            <Link to="/$owner/$repo/parts" params={{ owner, repo }} className={tile}>
               <Package size={15} className="text-fg-subtle transition-colors group-hover/tile:text-accent" /> <span className="probe-shift">BOM &amp; pricing</span>
             </Link>
           )}
