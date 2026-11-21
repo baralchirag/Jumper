@@ -13,7 +13,8 @@ export interface SemanticDiffResponse {
   bom: BomChange[] | null;
 }
 
-const CACHE_VERSION = 'v1';
+// v2: KiCad 9 teardrop serialization bug repaired before parsing (older entries may have lost most of a board).
+const CACHE_VERSION = 'v2';
 
 async function oidAt(git: GitRepo, sha: string | null, path: string): Promise<string | null> {
   if (!sha) return null;

@@ -8,13 +8,19 @@ interface Pending {
   resolve: (v: unknown) => void;
   reject: (e: Error) => void;
   timer: NodeJS.Timeout;
+  slot: Slot;
+}
+
+interface Slot {
+  worker: Worker;
+  busy: number;
 }
 
 const TIMEOUT_MS = 60_000;
 
 /** Small pool of worker threads running the KiCad WASM core. */
 export class KicadPool {
-  private workers: { worker: Worker; busy: number }[] = [];
+  private workers: Slot[] = [];
   private pending = new Map<number, Pending>();
   private seq = 0;
 
@@ -27,10 +33,12 @@ export class KicadPool {
     // In dev (tsx) the source is .ts; after bundling it is emitted as .js next to index.js.
     const isTs = import.meta.url.endsWith('.ts');
     const url = new URL(isTs ? './kicad-thread.ts' : './kicad-thread.js', import.meta.url);
-    // Source workers need the tsx loader (inherited under `tsx`, explicit under vitest).
-    const hasLoader = process.execArgv.some((a) => a.includes('tsx'));
-    const worker = new Worker(url, isTs && !hasLoader ? { execArgv: [...process.execArgv, '--import', 'tsx'] } : {});
-    const slot = { worker, busy: 0 };
+    // A worker does not reliably inherit tsx's resolver (extensionless imports fail inside it), so source workers
+    // register tsx through its API before importing the thread module.
+    const worker = isTs
+      ? new Worker(`import(${JSON.stringify(import.meta.resolve('tsx/esm/api'))}).then((m) => { m.register(); return import(${JSON.stringify(url.href)}); })`, { eval: true })
+      : new Worker(url);
+    const slot: Slot = { worker, busy: 0 };
     worker.on('message', (msg: { id: number; ok: boolean; result?: unknown; error?: string }) => {
       const p = this.pending.get(msg.id);
       if (!p) return;
@@ -40,13 +48,20 @@ export class KicadPool {
       if (msg.ok) p.resolve(msg.result);
       else p.reject(new Error(msg.error));
     });
-    worker.on('error', () => this.replace(slot));
-    worker.on('exit', () => this.replace(slot));
+    // A crashed worker fails its requests at once (with the reason) instead of leaving them to time out.
+    worker.on('error', (e: unknown) => this.replace(slot, e instanceof Error ? e : new Error(String(e))));
+    worker.on('exit', (code) => this.replace(slot, new Error(`kicad-core worker exited (${code})`)));
     worker.unref();
     this.workers.push(slot);
   }
 
-  private replace(slot: { worker: Worker; busy: number }): void {
+  private replace(slot: Slot, reason: Error): void {
+    for (const [id, p] of this.pending) {
+      if (p.slot !== slot) continue;
+      this.pending.delete(id);
+      clearTimeout(p.timer);
+      p.reject(new Error(`kicad-core failed: ${reason.message}`));
+    }
     const i = this.workers.indexOf(slot);
     if (i === -1) return;
     this.workers.splice(i, 1);
@@ -71,7 +86,7 @@ export class KicadPool {
         reject(new Error('kicad-core timed out'));
         void slot.worker.terminate();
       }, TIMEOUT_MS);
-      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
+      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer, slot });
       slot.worker.postMessage({ id, op, args });
     });
   }

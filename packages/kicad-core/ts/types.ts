@@ -352,13 +352,23 @@ export interface RawBindings {
   bomDiff(beforeJson: string, afterJson: string): string;
 }
 
+/**
+ * Repair a known KiCad 9 serialization bug before parsing: some 9.0 releases wrote pad teardrop settings as
+ * `(curved_edges no)filter_ratio 0.9)`, dropping a parenthesis. KiCad reads such files anyway; a strict parser would
+ * close the footprint early and silently lose most of the board. Restoring the parenthesis makes it balanced again.
+ */
+export function repairKicadText(text: string): string {
+  return text.includes(')filter_ratio') ? text.replace(/\)filter_ratio/g, ')(filter_ratio') : text;
+}
+
 export function wrapBindings(raw: RawBindings): KicadCore {
+  const fix = repairKicadText;
   return {
     detectKind: (text) => (raw.detectKind(text) as DesignKind | undefined) ?? null,
-    parse: (text, kind = 'auto') => JSON.parse(raw.parse(text, kind)),
-    diff: (before, after, kind = 'auto') => JSON.parse(raw.diff(before, after, kind)),
-    conflicts: (base, ours, theirs, kind = 'auto') => JSON.parse(raw.conflicts(base, ours, theirs, kind)),
-    bom: (sheets) => JSON.parse(raw.bom(JSON.stringify(sheets))),
+    parse: (text, kind = 'auto') => JSON.parse(raw.parse(fix(text), kind)),
+    diff: (before, after, kind = 'auto') => JSON.parse(raw.diff(fix(before), fix(after), kind)),
+    conflicts: (base, ours, theirs, kind = 'auto') => JSON.parse(raw.conflicts(fix(base), fix(ours), fix(theirs), kind)),
+    bom: (sheets) => JSON.parse(raw.bom(JSON.stringify(sheets.map(fix)))),
     bomDiff: (before, after) => JSON.parse(raw.bomDiff(JSON.stringify(before), JSON.stringify(after))),
   };
 }
