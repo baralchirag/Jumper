@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, Navigate, useSearch } from '@tanstack/react-router';
+import { Link, Navigate } from '@tanstack/react-router';
 import { Check, Minus, Plus } from 'lucide-react';
 import { DEFAULT_PLANS, FEATURE_LABELS, FREE_TRIAL_DAYS_DEFAULT, REFERRAL_BONUS_DAYS_DEFAULT, planFeatures, type BillingCycle, type Feature, type Plan, type PlanId } from '@jumper/shared';
 import { SegmentedControl, buttonClass, cx } from '@jumper/ui';
@@ -7,100 +7,64 @@ import { PageContainer } from '../../shared/components/common';
 import { useMe } from '../../shared/lib/queries';
 import { isPaidPlan } from '../../shared/components/PlanBadge';
 
-type Audience = 'personal' | 'organization';
-
-/** What every plan gets: the product itself is never paywalled, only how much of it you use. */
+/** What every plan does. Plans differ only in how much you can store and run, and in team admin. */
 const EVERY_PLAN = [
-  'Connect GitHub, GitLab or any git repository',
+  'Pull from GitHub, GitLab or any git host',
   'Visual diffs of schematics and boards, in 2D and 3D',
-  'ERC and DRC on every commit, located on the board',
-  'A BOM with live stock and price breaks',
+  'ERC and DRC on every commit',
+  'Comments on parts and board areas',
+  'Parts list with prices and stock from LCSC and JLCPCB',
   'Fab packages for JLCPCB, PCBWay and OSH Park',
-  'Read-only share links for clients and fabs',
+  'Read-only share links',
 ];
 
-const PLANS: Record<Audience, PlanId[]> = {
-  personal: ['free', 'pro'],
-  // Organizations are for paying teams; a trial runs on a personal account first.
-  organization: ['team', 'enterprise'],
+/** Who each plan is for, in one line. */
+const FOR: Record<PlanId, string> = {
+  free: 'Try Jumper on your own boards. No card needed.',
+  pro: 'For a designer or a small team.',
+  team: 'For hardware teams that need single sign-on, roles and an audit log.',
+  enterprise: 'For companies with compliance needs: SAML, SCIM, legal hold, export control.',
 };
 
 const mb = (v: number | null) => (v === null ? 'Unlimited' : v >= 1024 ? `${Math.round(v / 1024)} GB` : `${v} MB`);
 const num = (v: number | null) => (v === null ? 'Unlimited' : v.toLocaleString('en-US'));
-
 const dollars = (n: number) => `$${n % 1 === 0 ? n : n.toFixed(2)}`;
 
-function price(plan: Plan, cycle: BillingCycle) {
+function price(plan: Plan, cycle: BillingCycle): { amount: string; unit: string } {
   const cents = cycle === 'annual' ? plan.priceAnnualCents : plan.priceMonthlyCents;
-  if (cents === null) return { amount: 'Custom', unit: 'Quoted for your team', note: null, was: null };
-  if (cents === 0) return { amount: '$0', unit: `${FREE_TRIAL_DAYS_DEFAULT}-day trial, then pick a plan`, note: null, was: null };
-  const perMonth = cycle === 'annual' ? cents / 12 / 100 : cents / 100;
-  const monthly = (plan.priceMonthlyCents ?? 0) / 100;
-  const saving = cycle === 'annual' && plan.priceMonthlyCents ? monthly * 12 - cents / 100 : 0;
-  return {
-    amount: dollars(perMonth),
-    unit: cycle === 'annual' ? 'per seat / month, billed yearly' : 'per seat / month',
-    note: saving > 0 ? `You save ${dollars(saving)} a year per seat` : `About ${dollars(Math.round((perMonth / 30) * 100) / 100)} a day`,
-    was: cycle === 'annual' && monthly > perMonth ? dollars(monthly) : null,
-  };
-}
-
-/** The free trial, told as what happens on which day: no surprises, and the next step is obvious. */
-function TrialTimeline() {
-  const steps = [
-    { when: 'Day 1', title: 'Everything, free', body: `Create an account and push your boards. You get every feature and 2 GB of storage, no card needed.` },
-    { when: `Day ${FREE_TRIAL_DAYS_DEFAULT}`, title: 'Your trial ends', body: 'Nothing is deleted. Your boards, history, check results and fab files stay readable and downloadable.' },
-    { when: 'Then', title: 'Pick a plan to keep pushing', body: `Pro keeps you going with 20 GB. Invite people to stretch the trial: each person who joins adds 1 GB for ${REFERRAL_BONUS_DAYS_DEFAULT} days.` },
-  ];
-  return (
-    <section aria-labelledby="trial-h" className="mb-10 rounded-md border border-border bg-canvas p-6 md:p-8">
-      <h2 id="trial-h" className="text-lg font-medium">How the free trial works</h2>
-      <ol className="relative mt-6 grid gap-8 md:grid-cols-3 md:gap-6">
-        <span aria-hidden className="absolute left-0 right-0 top-[9px] hidden h-0.5 bg-border md:block" />
-        {steps.map((st, i) => (
-          <li key={st.when} className="relative">
-            <span aria-hidden className={cx('relative z-10 block h-5 w-5 rounded-full border-2', i === 2 ? 'border-select bg-accent-emphasis' : 'border-fg-muted bg-canvas')} />
-            <p className="mt-4 font-mono text-[13px] text-fg-muted">{st.when}</p>
-            <p className="mt-1 text-[16px] font-medium">{st.title}</p>
-            <p className="mt-1.5 text-[14px] leading-relaxed text-fg-muted">{st.body}</p>
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
+  if (cents === null) return { amount: 'Custom', unit: 'Priced for your team' };
+  if (cents === 0) return { amount: '$0', unit: `for ${FREE_TRIAL_DAYS_DEFAULT} days` };
+  return cycle === 'annual' ? { amount: dollars(cents / 100), unit: 'per seat a year' } : { amount: dollars(cents / 100), unit: 'per seat a month' };
 }
 
 const FAQ = [
-  { q: 'What happens when the 30-day trial ends?', a: 'Your repositories stay exactly as they are: readable, browsable and downloadable. Pushing new commits, files or outputs needs a paid plan. Pick one and you carry on where you left off.' },
-  { q: 'Is any of my work deleted?', a: 'No. Nothing is removed when a trial ends or a plan changes. You can always export your repositories with git.' },
-  { q: 'Can I get more free storage?', a: `Yes, for a while: every person who signs up through your invite link adds 1 GB to your storage for ${REFERRAL_BONUS_DAYS_DEFAULT} days.` },
-  { q: 'Do you charge per repository or per board?', a: 'No. Repositories are unlimited. Plans differ in storage, check minutes and seats, and Business adds team controls like single sign-on and policies.' },
-  { q: 'What counts as a seat?', a: 'An organization member, or a collaborator on a personal private repository. The owner counts as one.' },
-  { q: 'Monthly or yearly?', a: 'Yearly billing costs ten months, so you get two months free. Monthly billing works too and you can switch.' },
-  { q: 'How do I pay?', a: 'Online payment is opening soon. Until then the Jumper team switches your plan on and sends an invoice, so there is no card to enter.' },
+  {
+    q: 'How does the trial work?',
+    a: `Sign up and you get every feature and ${mb(DEFAULT_PLANS.free.limits.storageMb)} of storage for ${FREE_TRIAL_DAYS_DEFAULT} days, without a card. When it ends nothing is deleted: your boards, history, check results and fab files stay readable and downloadable. Pushing new commits needs a paid plan.`,
+  },
+  { q: 'What are check minutes?', a: 'The time Jumper spends running kicad-cli on your commits: ERC, DRC, renders, the 3D model and fab files. Commits on any branch count.' },
+  { q: 'What counts as a seat?', a: 'A member of an organization, or a collaborator on one of your private repositories. You count as one.' },
+  { q: 'Do you charge per repository or per board?', a: 'No. Repositories and boards are unlimited on every plan.' },
+  { q: 'Can I get more trial storage?', a: `Yes. Each person who signs up with your invite link adds 1 GB for ${REFERRAL_BONUS_DAYS_DEFAULT} days.` },
+  { q: 'Monthly or yearly?', a: 'Yearly costs the same as ten months. You can switch between them.' },
+  { q: 'How do I pay?', a: 'Card payment isn’t open yet. Until it is, we switch your plan on by hand and send an invoice.' },
 ];
 
 export function PricingPage() {
   const { data: me } = useMe();
-  const search = useSearch({ strict: false }) as { for?: Audience };
-  const [audience, setAudience] = useState<Audience>(search.for ?? 'personal');
   const [cycle, setCycle] = useState<BillingCycle>('annual');
-  const ids = PLANS[audience];
   const firstOrg = me?.orgs.find((o) => o.role === 'owner');
 
-  const cta = (id: PlanId): { label: string; to: string; params?: Record<string, string>; search?: Record<string, string>; primary: boolean } => {
-    if (!me) return { label: id === 'free' ? `Start your ${FREE_TRIAL_DAYS_DEFAULT}-day trial` : id === 'enterprise' ? 'Talk to us' : `Get ${DEFAULT_PLANS[id].name}`, to: '/signup', primary: id !== 'free' && id !== 'enterprise' };
-    if (audience === 'personal') {
-      return id === 'free' ? { label: 'See your trial', to: '/settings/$section', params: { section: 'usage' }, primary: false } : { label: 'Get Pro', to: '/settings/$section', params: { section: 'usage' }, primary: true };
-    }
-    if (!firstOrg) return { label: 'Create an organization', to: '/organizations/new', primary: id !== 'free' };
-    return { label: id === 'enterprise' ? 'Talk to us' : id === 'free' ? 'Organization billing' : 'Upgrade organization', to: '/organizations/$org/settings/$section', params: { org: firstOrg.slug, section: 'billing' }, primary: id === 'team' };
+  const cta = (id: PlanId): { label: string; to: string; params?: Record<string, string>; primary: boolean } => {
+    if (!me) return { label: id === 'free' ? 'Start the trial' : id === 'enterprise' ? 'Contact us' : `Get ${DEFAULT_PLANS[id].name}`, to: '/signup', primary: id === 'pro' };
+    if (id === 'free' || id === 'pro') return id === 'free' ? { label: 'See your trial', to: '/settings/$section', params: { section: 'usage' }, primary: false } : { label: 'Get Pro', to: '/settings/$section', params: { section: 'usage' }, primary: true };
+    if (!firstOrg) return { label: 'Create an organization', to: '/organizations/new', primary: false };
+    return { label: id === 'enterprise' ? 'Contact us' : 'Upgrade organization', to: '/organizations/$org/settings/$section', params: { org: firstOrg.slug, section: 'billing' }, primary: false };
   };
 
   // Someone already paying has no use for the sales page: send them to their plan instead.
   if (isPaidPlan(me?.plan)) return <Navigate to="/settings/$section" params={{ section: 'usage' }} replace />;
 
-  // Comparison rows: limits, then the features that differ between plans.
   const all: PlanId[] = ['free', 'pro', 'team', 'enterprise'];
   const features = Object.keys(FEATURE_LABELS) as Feature[];
 
@@ -108,79 +72,54 @@ export function PricingPage() {
     <PageContainer className="max-w-[1280px] py-12 md:py-16">
       <header className="mb-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
         <div>
-          <h1 className="text-[clamp(2.5rem,1.6rem+2.6vw,4rem)] font-medium leading-[0.95]">Catch the respin before it ships.</h1>
+          <h1 className="text-[clamp(2.5rem,1.6rem+2.6vw,4rem)] font-medium leading-[0.95]">Pricing</h1>
           <p className="mt-4 max-w-xl text-[16px] leading-relaxed text-fg-muted">
-            Every plan includes the whole engine: visual diffs, ERC and DRC on every commit, a priced BOM and fab packages. Connect GitHub and try it free for {FREE_TRIAL_DAYS_DEFAULT} days, then keep your boards moving from {dollars((DEFAULT_PLANS.pro.priceAnnualCents ?? 0) / 1200)} a month.
+            Every plan runs the same diffs and checks on your boards. Plans differ in storage, check minutes and seats. Business and Enterprise add admin for larger teams.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <SegmentedControl
-            size="md"
-            value={audience}
-            onChange={setAudience}
-            ariaLabel="Plans for"
-            options={[
-              { value: 'personal', label: 'Personal' },
-              { value: 'organization', label: 'Organization' },
-            ]}
-          />
-          <SegmentedControl
-            size="md"
-            value={cycle}
-            onChange={setCycle}
-            ariaLabel="Billing period"
-            options={[
-              { value: 'monthly', label: 'Monthly' },
-              { value: 'annual', label: 'Yearly · 2 months free' },
-            ]}
-          />
-        </div>
+        <SegmentedControl
+          size="md"
+          value={cycle}
+          onChange={setCycle}
+          ariaLabel="Billing period"
+          options={[
+            { value: 'monthly', label: 'Monthly' },
+            { value: 'annual', label: 'Yearly, 2 months free' },
+          ]}
+        />
       </header>
 
-      <TrialTimeline />
-
-      <div className={cx('grid border-y border-border md:border-x md:divide-x md:divide-border', ids.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3')}>
-        {ids.map((id) => {
+      <div className="grid border-l border-t border-border sm:grid-cols-2 lg:grid-cols-4">
+        {all.map((id) => {
           const plan = DEFAULT_PLANS[id];
           const p = price(plan, cycle);
           const c = cta(id);
-          const highlight = (audience === 'personal' && id === 'pro') || (audience === 'organization' && id === 'team');
-          const extra = planFeatures(id);
+          const added = id === 'enterprise' ? planFeatures(id).filter((f) => !planFeatures('team').includes(f)) : planFeatures(id);
           return (
-            <section key={id} aria-labelledby={`plan-${id}`} className={cx('relative flex flex-col gap-6 border-b border-border p-6 last:border-b-0 md:border-b-0 md:p-8', highlight && 'bg-canvas')}>
-              {highlight && <span aria-hidden className="absolute inset-x-0 top-0 h-1 bg-accent-emphasis" />}
-              <div>
-                <h2 id={`plan-${id}`} className="flex items-center gap-2 text-xl font-medium">
-                  {plan.name}
-                  {highlight && <span className="rounded-sm bg-accent-emphasis px-1.5 py-0.5 text-[11.5px] font-medium text-fg-on-accent">Recommended</span>}
-                </h2>
-                <p className="mt-2 min-h-[3em] text-[14px] leading-relaxed text-fg-muted">{plan.blurb}</p>
-              </div>
-              <div>
-                <p className="flex items-baseline gap-2">
-                  <span className="font-title text-[2.75rem] font-medium leading-none tracking-[-0.035em] tabular-nums">{p.amount}</span>
-                  {p.was && <span className="text-lg text-fg-subtle line-through tabular-nums">{p.was}</span>}
-                </p>
-                <p className="mt-2 text-[13px] text-fg-muted">{p.unit}</p>
-                {p.note && <p className="mt-1 text-[13px] font-medium text-success">{p.note}</p>}
-              </div>
-              <Link to={c.to} params={c.params as never} search={c.search as never} className={buttonClass(c.primary ? 'accent' : 'default', 'md', 'w-full')}>
+            <section key={id} aria-labelledby={`plan-${id}`} className={cx('relative flex flex-col border-b border-r border-border p-6', id === 'pro' && 'before:absolute before:inset-x-0 before:-top-px before:h-[3px] before:bg-accent-emphasis')}>
+              <h2 id={`plan-${id}`} className="text-[19px] font-medium">
+                {id === 'free' ? 'Free trial' : plan.name}
+              </h2>
+              <p className="mt-1.5 min-h-[2.8em] text-[14px] leading-snug text-fg-muted">{FOR[id]}</p>
+              <p className="mt-6 font-title text-[2.5rem] font-medium leading-none tracking-[-0.035em] tabular-nums">{p.amount}</p>
+              <p className="mt-2 min-h-[2.6em] text-[13px] leading-snug text-fg-muted">{p.unit}</p>
+              <Link to={c.to} params={c.params as never} className={buttonClass(c.primary ? 'accent' : 'default', 'md', 'mt-4 w-full')}>
                 {c.label}
               </Link>
-              <dl className="grid grid-cols-[1fr_auto] gap-y-2 border-t border-border pt-5 text-[14px]">
+              <dl className="mt-6 grid grid-cols-[1fr_auto] gap-y-2 text-[14px]">
                 <dt className="text-fg-muted">Storage</dt>
-                <dd className="text-right tabular-nums">{id === 'free' ? `${mb(plan.limits.storageMb)} for ${FREE_TRIAL_DAYS_DEFAULT} days` : mb(plan.limits.storageMb)}</dd>
+                <dd className="text-right tabular-nums">{mb(plan.limits.storageMb)}</dd>
                 <dt className="text-fg-muted">Check minutes</dt>
-                <dd className="text-right tabular-nums">{plan.limits.checkMinutes === null ? 'Unlimited' : `${num(plan.limits.checkMinutes)} / month`}</dd>
+                <dd className="text-right tabular-nums">{plan.limits.checkMinutes === null ? 'Unlimited' : `${num(plan.limits.checkMinutes)} a month`}</dd>
                 <dt className="text-fg-muted">Seats</dt>
                 <dd className="text-right tabular-nums">{plan.limits.seats === null ? 'Unlimited' : `Up to ${num(plan.limits.seats)}`}</dd>
               </dl>
-              {extra.length > 0 && (
-                <ul className="flex flex-col gap-2 text-[14px]">
-                  <li className="text-fg-muted">{id === 'enterprise' ? 'Everything in Business, and:' : 'Everything in Pro, and:'}</li>
-                  {(id === 'enterprise' ? extra.filter((f) => !planFeatures('team').includes(f)) : extra).map((f) => (
+              {added.length > 0 && (
+                <ul className="mt-6 flex flex-col gap-1.5 border-t border-border-muted pt-4 text-[14px]">
+                  <li className="text-fg-muted">{id === 'enterprise' ? 'Everything in Business, plus' : 'Everything in Pro, plus'}</li>
+                  {added.map((f) => (
                     <li key={f} className="flex gap-2">
-                      <Check size={16} aria-hidden className="mt-0.5 shrink-0 text-success" />
+                      <Check size={15} aria-hidden className="mt-0.5 shrink-0 text-fg-muted" />
                       {FEATURE_LABELS[f]}
                     </li>
                   ))}
@@ -191,33 +130,19 @@ export function PricingPage() {
         })}
       </div>
 
-      <section aria-labelledby="every-h" className="mt-12 grid gap-6 border-b border-border pb-12 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-        <h2 id="every-h" className="text-lg font-medium">In every plan</h2>
+      <section aria-labelledby="every-h" className="mt-14 grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <h2 id="every-h" className="text-lg font-medium">In every plan, the trial included</h2>
         <ul className="grid gap-x-8 gap-y-2.5 text-[15px] sm:grid-cols-2">
           {EVERY_PLAN.map((f) => (
             <li key={f} className="flex gap-2">
-              <Check size={16} aria-hidden className="mt-1 shrink-0 text-success" />
+              <Check size={16} aria-hidden className="mt-1 shrink-0 text-fg-muted" />
               {f}
             </li>
           ))}
         </ul>
       </section>
 
-      <section aria-labelledby="value-h" className="mt-12 grid gap-6 rounded-md bg-fg p-8 text-canvas md:grid-cols-[minmax(0,2fr)_auto] md:items-center md:p-10">
-        <div>
-          <h2 id="value-h" className="font-title text-[clamp(1.6rem,1.2rem+1.2vw,2.25rem)] font-medium leading-tight tracking-[-0.03em]">
-            One mistake caught in review can cost more than a year of Pro.
-          </h2>
-          <p className="mt-3 max-w-2xl text-[15px] leading-relaxed opacity-80">
-            A swapped footprint, a missed DRC error, a wrong value in the BOM: Jumper puts every commit in front of your team as a board, before you order.
-          </p>
-        </div>
-        <Link to={me ? '/settings/$section' : '/signup'} params={me ? ({ section: 'usage' } as never) : (undefined as never)} className={buttonClass('accent', 'md')}>
-          {me ? 'Get Pro' : `Start your ${FREE_TRIAL_DAYS_DEFAULT}-day trial`}
-        </Link>
-      </section>
-
-      <section aria-labelledby="compare-h" className="mt-12">
+      <section aria-labelledby="compare-h" className="mt-14 border-t border-border pt-10">
         <h2 id="compare-h" className="mb-5 text-lg font-medium">Compare plans</h2>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[40rem] border-collapse text-left text-[14px]">
@@ -227,8 +152,8 @@ export function PricingPage() {
                   <span className="sr-only">Feature</span>
                 </th>
                 {all.map((id) => (
-                  <th key={id} scope="col" className="px-3 py-3 font-medium">
-                    {DEFAULT_PLANS[id].name}
+                  <th key={id} scope="col" className="w-[16%] px-3 py-3 font-medium">
+                    {id === 'free' ? 'Free trial' : DEFAULT_PLANS[id].name}
                   </th>
                 ))}
               </tr>
@@ -236,8 +161,8 @@ export function PricingPage() {
             <tbody>
               {(
                 [
-                  ['Storage', (p: Plan) => (p.id === 'free' ? `${mb(p.limits.storageMb)}, first ${FREE_TRIAL_DAYS_DEFAULT} days` : mb(p.limits.storageMb))],
-                  ['Check minutes per month', (p: Plan) => num(p.limits.checkMinutes)],
+                  ['Storage', (p: Plan) => mb(p.limits.storageMb)],
+                  ['Check minutes a month', (p: Plan) => num(p.limits.checkMinutes)],
                   ['Seats', (p: Plan) => num(p.limits.seats)],
                 ] as const
               ).map(([label, f]) => (
@@ -259,7 +184,7 @@ export function PricingPage() {
                   </th>
                   {all.map((id) => (
                     <td key={id} className="px-3 py-3">
-                      {planFeatures(id).includes(feat) ? <Check size={16} aria-label="Included" className="text-success" /> : <Minus size={16} aria-label="Not included" className="text-fg-subtle" />}
+                      {planFeatures(id).includes(feat) ? <Check size={16} aria-label="Included" /> : <Minus size={16} aria-label="Not included" className="text-fg-subtle" />}
                     </td>
                   ))}
                 </tr>
@@ -267,11 +192,10 @@ export function PricingPage() {
             </tbody>
           </table>
         </div>
-        <p className="mt-6 max-w-2xl text-[13px] leading-relaxed text-fg-muted">
-          The Free plan is a {FREE_TRIAL_DAYS_DEFAULT}-day storage trial: afterwards your work stays readable, and pushing new data needs a paid plan. Inviting people adds storage for {REFERRAL_BONUS_DAYS_DEFAULT} days per person who joins. Prices are in US dollars, per seat. A seat is an organization member, or a collaborator on a personal private repository. Online payment is not open yet: paid plans are switched on for you by the Jumper team and invoiced.
-        </p>
+        <p className="mt-4 text-[13px] text-fg-muted">Prices in US dollars, per seat.</p>
       </section>
-      <section aria-labelledby="faq-h" className="mt-16 grid gap-8 border-t border-border pt-12 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+
+      <section aria-labelledby="faq-h" className="mt-14 grid gap-8 border-t border-border pt-10 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
         <h2 id="faq-h" className="text-lg font-medium">Questions</h2>
         <div className="divide-y divide-border-muted border-y border-border">
           {FAQ.map((f) => (
