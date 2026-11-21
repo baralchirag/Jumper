@@ -13,6 +13,10 @@ import { canManageNamespace, findNamespace, findRepo, repoDiskPath } from '../re
 import { enqueueAnalysis } from '../repos/push';
 import { toRepoInfo } from '../repos/serialize';
 import { friendlyGitError, parseDefaultBranch, repoNameFromUrl, resolveRemote } from './service';
+import { failImport, finishImport, startImport } from './jobs';
+
+/** How long the request waits for a copy before answering and letting it finish in the background. */
+const importWaitMs = () => Number(process.env.IMPORT_WAIT_MS ?? 8000);
 
 const importSchema = z.object({
   url: z.string().trim().min(8).max(2000),
@@ -63,17 +67,21 @@ const importRoutes: FastifyPluginAsyncZod = async (app) => {
     }
     if (head.empty) throw badRequest('That repository has no commits to import');
 
-    // 2. Copy into a new bare repository.
+    // 2. Copy into a new bare repository. The request waits a few seconds; a bigger copy carries on after the
+    //    response (the page can be closed) and the repository page follows it.
     const [repo] = await ctx.db
       .insert(repositories)
       .values({ namespaceId: ns.id, name, description: b.description, visibility: b.visibility })
       .returning();
     const dest = repoDiskPath(ctx, repo!.id);
+    const source = `${target.url.host}${target.url.pathname}`.replace(/\.git$/, '');
     const cleanup = async () => {
       await ctx.db.delete(repositories).where(eq(repositories.id, repo!.id));
       await rm(dest, { recursive: true, force: true }).catch(() => {});
     };
-    try {
+    startImport(repo!.id, source);
+
+    const copy = async () => {
       const gr = await GitRepo.init(dest, repo!.defaultBranch);
       await runGit([...cfg, '-c', 'transfer.fsckObjects=true', 'fetch', '--quiet', '--prune', '--', remote, '+refs/heads/*:refs/heads/*', '+refs/tags/*:refs/tags/*'], {
         cwd: dest,
@@ -81,15 +89,9 @@ const importRoutes: FastifyPluginAsyncZod = async (app) => {
         timeoutMs: ctx.env.IMPORT_TIMEOUT_MS,
       });
       const size = await gr.sizeBytes();
-      if (size > ctx.env.IMPORT_MAX_MB * 1024 * 1024) {
-        await cleanup();
-        throw badRequest(`That repository is larger than this server allows importing (${ctx.env.IMPORT_MAX_MB} MB)`);
-      }
+      if (size > ctx.env.IMPORT_MAX_MB * 1024 * 1024) throw badRequest(`That repository is larger than this server allows importing (${ctx.env.IMPORT_MAX_MB} MB)`);
       const branches = await gr.branches();
-      if (!branches.length) {
-        await cleanup();
-        throw badRequest('That repository has no branches to import');
-      }
+      if (!branches.length) throw badRequest('That repository has no branches to import');
       const defaultBranch = head.branch && branches.some((x) => x.name === head.branch) ? head.branch : branches[0]!.name;
       await gr.setHead(defaultBranch);
       const [updated] = await ctx.db.update(repositories).set({ defaultBranch, pushedAt: new Date(), sizeBytes: size }).where(eq(repositories.id, repo!.id)).returning();
@@ -109,12 +111,29 @@ const importRoutes: FastifyPluginAsyncZod = async (app) => {
         await ctx.db.insert(repoMirrors).values(b.mirror === 'two-way' ? [{ ...base, direction: 'pull' as const }, { ...base, direction: 'push' as const }] : [{ ...base, direction: 'pull' as const }]);
       }
       await audit(req, 'repo.import', { type: 'repo', id: repo!.id }, { from: `${target.url.protocol}//${target.url.host}${target.url.pathname}`, to: `${ns.slug}/${name}`, branches: branches.length, mirror: b.mirror });
-      return toRepoInfo(ctx, updated!, ns, 'admin', { isEmpty: false });
-    } catch (e) {
-      if (e instanceof Error && 'statusCode' in e) throw e; // already cleaned up and user-facing
-      await cleanup();
-      throw badRequest(friendlyGitError(e instanceof GitError ? e.stderr : String(e)));
+      finishImport(repo!.id);
+      return updated!;
+    };
+    const userFacing = (e: unknown) => (e instanceof Error && 'statusCode' in e ? e : badRequest(friendlyGitError(e instanceof GitError ? e.stderr : String(e))));
+
+    const job = copy();
+    const waited = await Promise.race([job.then((r) => ({ done: true as const, repo: r }), (e: unknown) => ({ done: true as const, error: e })), new Promise<{ done: false }>((r) => setTimeout(() => r({ done: false }), importWaitMs()).unref())]);
+    if (waited.done) {
+      if ('error' in waited) {
+        finishImport(repo!.id);
+        await cleanup();
+        throw userFacing(waited.error);
+      }
+      return toRepoInfo(ctx, waited.repo, ns, 'admin', { isEmpty: false });
     }
+    // Still copying: answer now and let it finish on its own. A failure leaves an empty repository with the reason.
+    job.catch(async (e: unknown) => {
+      req.log.warn({ err: e, repo: repo!.id }, 'background import failed');
+      failImport(repo!.id, userFacing(e).message);
+      await rm(dest, { recursive: true, force: true }).catch(() => {});
+      await GitRepo.init(dest, repo!.defaultBranch).catch(() => {});
+    });
+    return toRepoInfo(ctx, repo!, ns, 'admin', { isEmpty: true });
   });
 };
 

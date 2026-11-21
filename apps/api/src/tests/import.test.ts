@@ -35,6 +35,27 @@ describe.skipIf(!dbAvailable)('import from a git URL', () => {
     expect(existsSync(`${h.ctx.env.reposDir}/${row[0]!.id}.git`)).toBe(true);
   });
 
+  it('finishes in the background when the copy outlasts the request', async () => {
+    const src = await h.repo(alice, 'slow');
+    await commitFiles(src.git, { 'README.md': '# slow' });
+    process.env.IMPORT_WAIT_MS = '0';
+    try {
+      const res = await bob.post('/api/repos/import', { url: `${base}/alice/slow.git` });
+      expect(res.status, res.body).toBe(200);
+      expect(res.json).toMatchObject({ owner: 'bob', name: 'slow', isEmpty: true });
+      expect(res.json.importing.source).toContain('/alice/slow');
+      let info = res.json;
+      for (let i = 0; i < 50 && (info.isEmpty || info.importing); i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        info = (await bob.get('/api/repos/bob/slow')).json;
+      }
+      expect(info.isEmpty).toBe(false);
+      expect(info.importing).toBeUndefined();
+    } finally {
+      delete process.env.IMPORT_WAIT_MS;
+    }
+  });
+
   it('preserves a non-main default branch', async () => {
     const src = await h.repo(alice, 'trunk');
     await commitFiles(src.git, { 'a.txt': 'x' }, { branch: 'develop' });

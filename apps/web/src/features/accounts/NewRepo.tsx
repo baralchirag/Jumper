@@ -11,7 +11,7 @@ import { useMe } from '../../shared/lib/queries';
 type Start = 'empty' | 'sample' | 'template' | 'import';
 
 const STARTS: { id: Start; title: string; hint: string; icon: React.ReactNode }[] = [
-  { id: 'import', title: 'Connect from GitHub', hint: 'Keep your repo on GitHub; Jumper follows it and checks every commit.', icon: <Download size={18} /> },
+  { id: 'import', title: 'Connect from GitHub', hint: 'Keep your repo on GitHub; Jumper follows it and checks every commit. Big repositories copy in the background.', icon: <Download size={18} /> },
   { id: 'empty', title: 'Empty repository', hint: 'Push your project to Jumper directly.', icon: <FilePlus2 size={18} /> },
   { id: 'sample', title: 'Example board', hint: 'A small complete KiCad project to explore.', icon: <CircuitBoard size={18} /> },
   { id: 'template', title: 'Starter template', hint: 'A microcontroller board ready to lay out.', icon: <Cpu size={18} /> },
@@ -210,7 +210,7 @@ export function NewRepoPage() {
           <Button type="submit" variant="primary" loading={busy}>
             {importing ? 'Import repository' : 'Create repository'}
           </Button>
-          {importing && busy && <span className="text-sm text-fg-muted">Copying the repository. Large ones can take a few minutes; please keep this page open.</span>}
+          {importing && busy && <span className="text-sm text-fg-muted">Checking the repository…</span>}
         </div>
       </form>
     </PageContainer>

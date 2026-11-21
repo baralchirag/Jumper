@@ -2,6 +2,7 @@ import type { Namespace, Repository, User } from '@jumper/db';
 import { ROLE_CAPS, type Capability, type RepoInfo, type UserSummary } from '@jumper/shared';
 import type { Ctx } from '../../context';
 import type { Permission } from './access';
+import { importState } from '../import/jobs';
 
 export function toUserSummary(u: Pick<User, 'id' | 'username' | 'name' | 'avatarUrl'>): UserSummary {
   return { id: u.id, username: u.username, name: u.name, avatarUrl: u.avatarUrl };
@@ -47,5 +48,6 @@ export function toRepoInfo(
     legalHold: extra.legalHold ?? false,
     cloneUrl: cloneUrl(ctx, ns, repo),
     sshCloneUrl: sshCloneUrl(ctx, ns, repo),
+    ...importState(repo.id),
   };
 }

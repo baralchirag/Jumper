@@ -9,6 +9,7 @@ import { CheckIcon, rollup } from '../checks/CheckStatus';
 import { Markdown } from '../../shared/components/Markdown';
 import { ProjectHero } from './ProjectHero';
 import { MissingFiles, useDesigns } from './MissingFiles';
+import { ImportFailed, ImportProgress } from './Importing';
 import { RefPicker } from '../../shared/components/RefPicker';
 import { Breadcrumbs, ErrorView, FileIcon, formatBytes, shortSha } from '../../shared/components/common';
 import { api, rawUrl, repoPath } from '../../shared/lib/api';
@@ -114,7 +115,13 @@ export function CodePage() {
   const checks = useChecks(info.owner, info.name, tree.data?.sha);
   const designs = useDesigns(info.owner, info.name, info.isEmpty || path ? undefined : gitRef);
 
-  if (info.isEmpty) return <FirstPush />;
+  if (info.importing) return <ImportProgress info={info} />;
+  if (info.isEmpty) return (
+    <>
+      <ImportFailed info={info} />
+      <FirstPush />
+    </>
+  );
   if (tree.isLoading) return <PageSpinner />;
   if (tree.error) return <ErrorView error={tree.error} />;
   const t = tree.data!;

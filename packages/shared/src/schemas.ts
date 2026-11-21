@@ -309,6 +309,10 @@ export interface RepoInfo {
   cloneUrl: string;
   /** SSH clone URL, or null when the server does not run SSH. */
   sshCloneUrl: string | null;
+  /** Set while a copy from another git host is still running in the background. */
+  importing?: { source: string; startedAt: string };
+  /** Why a background import stopped; the repository is left empty. */
+  importError?: { source: string; message: string };
 }
 
 export interface NamespaceInfo {
