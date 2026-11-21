@@ -380,7 +380,7 @@ function SiteFooter({ signedIn, paid }: { signedIn: boolean; paid: boolean }) {
             <Link to="/" className="inline-flex text-fg no-underline" aria-label="Jumper home">
               <Wordmark />
             </Link>
-            <p className="mt-3 max-w-xs text-sm leading-relaxed text-fg-muted">Git hosting for KiCad. Every commit rendered, checked and compared as a board.</p>
+            <p className="mt-3 max-w-xs text-sm leading-relaxed text-fg-muted">Visual diffs, checks and fab files for KiCad projects on GitHub.</p>
           </div>
           <FooterCol
             title="Product"

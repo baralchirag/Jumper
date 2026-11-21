@@ -17,16 +17,16 @@ import { useMe, wasSignedIn } from '../../shared/lib/queries';
 
 /** What every commit gets; each links to the page in the docs that explains it. */
 const EVERY_COMMIT = [
-  { title: 'Visual diff', body: 'Parts, tracks, vias and zones matched by KiCad UUID. The board stays quiet; only the change is in colour.', slug: 'design-analysis' },
-  { title: 'Comments on parts', body: 'Pin a question to R6 or to an area of the board. Threads follow the part from commit to commit.', slug: 'design-analysis' },
-  { title: 'Renders and 3D', body: 'KiCad’s own renders, front and back, and a 3D board with the real part models from your library.', slug: 'design-analysis' },
-  { title: 'BOM and fab files', body: 'Priced parts from LCSC, JLCPCB, Mouser and DigiKey, and Gerbers, drill and pick-and-place ready to order.', slug: 'jumper-yml' },
+  { title: 'Visual diff', body: 'Parts, tracks, vias and zones are matched between commits by their KiCad UUID. Whatever was added, removed or changed is drawn in colour.', slug: 'design-analysis' },
+  { title: 'ERC and DRC', body: 'kicad-cli checks every schematic and board. Click a violation to jump to where it is.', slug: 'design-analysis' },
+  { title: 'Parts and prices', body: 'Each part priced, with stock, from LCSC and JLCPCB. Parts that are out of stock or can’t be found are listed first.', slug: 'design-analysis' },
+  { title: 'Fab files', body: 'Gerbers, drill, pick-and-place and BOM, zipped the way JLCPCB, PCBWay or OSH Park ask for them.', slug: 'jumper-yml' },
 ] as const;
 
 const STEPS = [
-  { title: 'Connect GitHub.', body: 'Paste the repository URL. Jumper follows it from then on; nothing changes for your team.' },
-  { title: 'See the change.', body: 'Every commit checked and compared as a board, so a review takes minutes instead of a respin.' },
-  { title: 'Order the panel.', body: 'Gerbers, drill, BOM and pick-and-place packaged for JLCPCB, PCBWay or OSH Park.' },
+  { title: 'Connect a repository', body: 'Paste its GitHub URL. Private repositories need a read-only token. Jumper pulls new commits by itself, and your team keeps using git as before.' },
+  { title: 'Open a commit', body: 'ERC, DRC and the parts list usually arrive within a minute. Renders, the 3D model and fab files follow.' },
+  { title: 'Order the boards', body: 'Download the fab package from Outputs and upload it on the fab’s order page.' },
 ] as const;
 
 // The review window brings the WebGL viewer: its code arrives right after the hero paints.
@@ -153,7 +153,7 @@ function AnnotatedPart() {
   );
 }
 
-function PrimaryCta({ className, label = 'Start a project' }: { className?: string; label?: string }) {
+function PrimaryCta({ className, label = 'Connect a repository' }: { className?: string; label?: string }) {
   return (
     <Link to="/signup" className={cx('lp-cta group/cta', className)}>
       <span className="roll">
@@ -173,15 +173,15 @@ function Landing() {
       {/* The review window, first: a real board, the change in colour, the list beside it, a thread on a part. */}
       <section className="lp-wrap pb-20 pt-14 md:pb-28 md:pt-20">
         <div className="grid items-end gap-x-12 gap-y-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,25rem)]">
-          <h1 className="lp-title font-title">See what changed.</h1>
+          <h1 className="lp-title font-title">Board diffs for KiCad.</h1>
           <div className="lg:pb-3">
             <p className="text-pretty text-[17px] leading-relaxed text-[var(--lp-muted)]">
-              The KiCad companion for GitHub. Every commit drawn as a board, with only the change in colour, and comments pinned to the parts.
+              Connect a GitHub repository and Jumper draws each commit’s schematic and board, colours what changed, and runs ERC and DRC. Your team comments on the parts themselves.
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
               <PrimaryCta />
               <Link to="/docs/$slug" params={{ slug: 'quick-start' }} className="lp-link text-[15px]">
-                How it works with GitHub
+                How it works
               </Link>
             </div>
           </div>
@@ -190,11 +190,11 @@ function Landing() {
         <div className="mt-12 md:mt-16">
           <LiveSlot />
           <p className="mt-4 text-[13px] text-[var(--lp-muted)]">
-            {BOARD.name} by {BOARD.author} · <span className="whitespace-nowrap">{BOARD.license}</span> ·{' '}
+            A real board: {BOARD.name} by {BOARD.author}, <span className="whitespace-nowrap">{BOARD.license}</span> (
             <a href={BOARD.url} target="_blank" rel="noreferrer" className="lp-link">
               source
             </a>
-            . Rev B is an example change made for this page; the diff is computed by the same engine that reads your commits.
+            ). We made Rev B for this page: D1 moved, R6 changed, J4 removed, SW3, TP12 and TP13 added. Click around; nothing here is saved.
           </p>
         </div>
       </section>
@@ -204,10 +204,10 @@ function Landing() {
         <div className="lp-wrap grid gap-x-16 gap-y-10 py-20 md:py-28 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:items-center">
           <div>
             <h2 id="comment-h" className="lp-h2">
-              Comment on the part, not the line.
+              Comments go on the part.
             </h2>
             <p className="mt-5 text-[16px] leading-relaxed text-[var(--lp-muted)]">
-              Click a part or drag over an area of the board, and ask. The thread stays pinned to R6 while the board changes around it, and closes when someone resolves it.
+              Click a part, or drag a box over an area, and write. The comment is tied to the part’s KiCad UUID, so it stays on R6 in later commits even after R6 moves. Resolve it once it’s answered.
             </p>
           </div>
           <AnnotatedPart />
@@ -219,23 +219,23 @@ function Landing() {
         <div className="lp-wrap py-20 md:py-28">
           <div className="mb-10 grid gap-x-12 gap-y-4 md:mb-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-end">
             <h2 id="render-h" className="lp-h2">
-              Every commit, rendered the way it will be built.
+              KiCad’s own renders of each commit.
             </h2>
             <p className="text-[15px] leading-relaxed text-[var(--lp-muted)]">
-              kicad-cli renders the real soldermask, silkscreen and parts on every push. Drag across this one to wipe from Rev A to Rev B.
+              Jumper runs kicad-cli on every push and keeps the front, back and angled views. Drag across the image to compare Rev A with Rev B.
             </p>
           </div>
           <BoardDiff position={position} onChange={setPosition} />
           <p className="mt-4 text-[13px] text-[var(--lp-muted)]">
-            {CHANGES.length} changes between the two renders. KiCad ray-traced both; nothing is retouched.
+            Both images come straight from kicad-cli, unedited. {CHANGES.length} changes between them.
           </p>
 
           <div className="mt-16 grid gap-x-16 gap-y-8 md:mt-24 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-center">
             <Board3D />
             <div>
-              <h3 className="text-[clamp(1.4rem,1.1rem+1vw,1.9rem)] font-medium leading-tight tracking-[-0.025em]">The same board in 3D, with the parts that will be on it.</h3>
+              <h3 className="text-[clamp(1.4rem,1.1rem+1vw,1.9rem)] font-medium leading-tight tracking-[-0.025em]">A 3D model you can turn over.</h3>
               <p className="mt-4 text-[15px] leading-relaxed text-[var(--lp-muted)]">
-                KiCad’s 3D export with the models from your library: the USB-C shell, the module shield, every 0402. Turn it over to check the back before you order.
+                Exported by kicad-cli with the 3D models from your libraries. Drag it to check the underside before you order. In the app, click any part to see its value, footprint and nets.
               </p>
             </div>
           </div>
@@ -246,7 +246,7 @@ function Landing() {
       <section aria-labelledby="every-h" className="border-t border-[var(--lp-line)]">
         <div className="lp-wrap py-16 md:py-20">
           <h2 id="every-h" className="mb-8 text-[clamp(1.5rem,1.2rem+1vw,2rem)] font-medium tracking-[-0.02em]">
-            On every commit, automatically
+            What each commit gets
           </h2>
           <ul className="grid border-l border-t border-[var(--lp-line)] sm:grid-cols-2 lg:grid-cols-4">
             {EVERY_COMMIT.map((f) => (
@@ -268,7 +268,7 @@ function Landing() {
       <section aria-labelledby="close-h" className="lp-close">
         <div className="lp-wrap pb-16 pt-20 md:pb-20 md:pt-28">
           <h2 id="close-h" className="sr-only">
-            Commit the board. Review the change. Order the panel.
+            How to start
           </h2>
           <ol className="lp-steps">
             {STEPS.map((step, i) => (
@@ -287,7 +287,7 @@ function Landing() {
             <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
               <PrimaryCta className="lp-cta-ink" />
               <Link to="/login" className="lp-link text-[15px]">
-                I already have an account
+                Sign in
               </Link>
             </div>
             <p className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
