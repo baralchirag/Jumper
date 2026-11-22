@@ -13,7 +13,6 @@ This policy explains what {{operator}} ("we") collects when you use Jumper at {{
 | Sessions: browser user agent, IP address, time | Your browser | To keep you signed in and let you see and end your sessions |
 | Security log: sign-ins, token and permission changes, with IP address | Our servers | To protect your account and investigate abuse |
 | Emails we send (verification, password reset, notifications) | Our servers | To deliver messages you asked for |
-| Billing: plan, billing email and address, tax ID, invoices; for card payments a Stripe customer and subscription ID | You, and Stripe when you pay by card | To bill you and keep records tax law requires |
 
 We do **not** use advertising, third-party analytics or tracking pixels, and we do not sell personal data.
 
@@ -30,13 +29,11 @@ No consent banner is needed because nothing here is used for tracking.
 - **Contract:** your account, repositories and everything the service does with them.
 - **Legitimate interests:** security logs, abuse prevention, backups.
 - **Consent:** optional emails such as digests, which you can switch off at any time.
-- **Legal obligation:** keeping billing records where tax law requires it.
 
 ## Who we share data with
 
 - **Collaborators and the public:** what you put in a repository is visible to whoever can access it. Public repositories and public profiles are visible to everyone.
 - **Infrastructure providers** that host our servers, storage and email, under contracts that require them to protect it.
-- **Stripe** processes card payments. Card numbers go straight to Stripe and never reach our servers; we receive the subscription and payment status and copies of the invoices Stripe issues (with the billing name, email, address and tax ID on them).
 - **Distributors** (LCSC, JLCPCB, Mouser, DigiKey) receive part numbers, keywords and quantities when you price a BOM. They receive no personal data.
 - **Webhook endpoints** you configure receive the event payloads you chose.
 - **Authorities**, when the law requires it. Where we are allowed to, we tell you first.

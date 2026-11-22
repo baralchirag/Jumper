@@ -1,6 +1,5 @@
 // Request schemas (validated by the API) and response types (consumed by the web app).
 import { z } from 'zod';
-import type { PlanId } from './plans';
 import {
   CHECK_CONCLUSIONS,
   CHECK_STATUSES,
@@ -56,27 +55,7 @@ export const registerSchema = z.object({
   username: slugSchema,
   email: z.email().max(254),
   password: z.string().min(10, 'Use at least 10 characters').max(256),
-  /** Username of whoever shared the invite link, from /signup?ref=. */
-  ref: z.string().max(100).optional(),
 });
-
-export interface ReferralInfo {
-  /** Your invite link. */
-  link: string;
-  signupOpen: boolean;
-  bonusPerReferralMb: number;
-  maxBonusMb: number;
-  /** Storage your running invite bonuses add right now. */
-  bonusMb: number;
-  /** How long each bonus lasts from the day the person joined, and when the earliest running one ends. */
-  bonusDays: number;
-  bonusExpiresAt: string | null;
-  /** False on instances that do not enforce plans: the bonus is recorded but there is no limit to raise. */
-  bonusApplies: boolean;
-  counted: number;
-  /** `active`: still adding storage today. */
-  invited: { username: string; joinedAt: string; counts: boolean; active: boolean }[];
-}
 
 export const loginSchema = z.object({
   login: z.string().min(1).max(254),
@@ -222,8 +201,6 @@ export interface CurrentUser extends UserSummary, ProfileFields {
   /** Cleared to view export-controlled repositories. */
   exportCleared: boolean;
   orgs: { slug: string; name: string; role: 'owner' | 'member' }[];
-  /** Plan of the user's personal namespace. */
-  plan: PlanId;
 }
 
 export interface SessionInfo {
@@ -332,8 +309,6 @@ export interface NamespaceInfo {
   pinned?: RepoInfo[];
   /** Public repositories shown here. */
   stats?: { repos: number };
-  /** The owner's plan; shown as a badge for paid plans. */
-  plan?: PlanId;
 }
 
 export const createInviteSchema = z.object({

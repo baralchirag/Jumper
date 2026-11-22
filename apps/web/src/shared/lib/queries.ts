@@ -50,7 +50,7 @@ export interface Providers {
   sso?: import('@jumper/shared').SsoProvider[];
 }
 
-/** Public facts about this instance (operator, sign-up, whether hosted plans apply). */
+/** Public facts about this instance (operator, sign-up). */
 export function useSite() {
   return useQuery({ queryKey: ['site'], queryFn: () => api.get<import('@jumper/shared').SiteInfo>('/site'), staleTime: Infinity });
 }

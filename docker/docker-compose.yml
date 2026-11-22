@@ -73,9 +73,6 @@ services:
       MOUSER_API_KEY: ${MOUSER_API_KEY:-}
       DIGIKEY_CLIENT_ID: ${DIGIKEY_CLIENT_ID:-}
       DIGIKEY_CLIENT_SECRET: ${DIGIKEY_CLIENT_SECRET:-}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
-      STRIPE_AUTOMATIC_TAX: ${STRIPE_AUTOMATIC_TAX:-false}
       # Encrypts stored mirror tokens. Set it, or a random key is kept on the repos volume.
       SECRET_KEY: ${SECRET_KEY:-}
       SECRET_KEY_FILE: /data/repos/.secret.key

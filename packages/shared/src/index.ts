@@ -6,6 +6,5 @@ export * from './paths';
 export * from './pricing';
 export * from './features';
 export * from './site';
-export * from './plans';
 export * from './hosting';
 export * from './business';

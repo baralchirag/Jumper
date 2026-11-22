@@ -15,7 +15,7 @@ export function ChecksPage() {
   if (q.error) return <ErrorView error={q.error} />;
   return (
     <div className="max-w-5xl space-y-12 py-2">
-      <PageHeader title="Checks">Automated results for this commit: electrical and design rule checks, renders and exports. A failing required check blocks merging.</PageHeader>
+      <PageHeader title="Checks">ERC, DRC, BOM, renders and exports for this commit.</PageHeader>
       <ChecksList owner={info.owner} repo={info.name} sha={q.data!.sha} runs={q.data!.runs} canRerun={canWrite(info)} />
       <OutputsPanel owner={info.owner} repo={info.name} sha={q.data!.sha} />
     </div>

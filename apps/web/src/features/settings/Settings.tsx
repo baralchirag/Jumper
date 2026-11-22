@@ -9,7 +9,6 @@ import {
   History,
   KeyRound,
   Bell,
-  Gift,
   Laptop,
   Link2,
   Lock,
@@ -22,8 +21,8 @@ import {
   Sun,
   Terminal,
   Trash2,
-  User, Gauge } from 'lucide-react';
-import type { AuditEntry, CurrentUser, ReferralInfo, RepoInfo, SessionInfo, SshKeyInfo, TokenInfo, TwoFactorSetup, TwoFactorStatus } from '@jumper/shared';
+  User } from 'lucide-react';
+import type { AuditEntry, CurrentUser, RepoInfo, SessionInfo, SshKeyInfo, TokenInfo, TwoFactorSetup, TwoFactorStatus } from '@jumper/shared';
 import qrcode from 'qrcode-generator';
 import { TOKEN_SCOPES } from '@jumper/shared';
 import { Avatar, Button, Checkbox, CopyButton, Flash, Input, Label, PageSpinner, RelativeTime, Select, Textarea, buttonClass, cx } from '@jumper/ui';
@@ -32,13 +31,10 @@ import { DeleteAccount } from './DeleteAccount';
 import { api, errorMessage } from '../../shared/lib/api';
 import { keys, useMe } from '../../shared/lib/queries';
 import { useThemePref, type ThemePref } from '../../shared/lib/theme';
-import { UsagePanel } from '../usage/UsagePanel';
-import { BillingPanel } from '../accounts/Governance';
-import { PlanBadge } from '../../shared/components/PlanBadge';
 
 // ─── Layout ────────────────────────────────────────────────────────────────
 
-type Section = 'profile' | 'account' | 'appearance' | 'notifications' | 'referrals' | 'security' | 'sessions' | 'tokens' | 'ssh-keys' | 'repositories' | 'organizations' | 'usage' | 'security-log';
+type Section = 'profile' | 'account' | 'appearance' | 'notifications' | 'security' | 'sessions' | 'tokens' | 'ssh-keys' | 'repositories' | 'organizations' | 'security-log';
 
 const NAV: { group?: string; items: { id: Section; label: string; icon: ReactNode }[] }[] = [
   {
@@ -63,8 +59,6 @@ const NAV: { group?: string; items: { id: Section; label: string; icon: ReactNod
     items: [
       { id: 'repositories', label: 'Repositories', icon: <FolderGit2 size={14} /> },
       { id: 'organizations', label: 'Organizations', icon: <Building2 size={14} /> },
-      { id: 'usage', label: 'Usage and plan', icon: <Gauge size={14} /> },
-      { id: 'referrals', label: 'Invite people', icon: <Gift size={14} /> },
     ],
   },
   {
@@ -89,7 +83,6 @@ function SettingsLayout({ section, children }: { section: Section; children: Rea
             <span>
               {me.name || me.username} <span className="font-normal text-fg-muted">({me.username})</span>
             </span>
-            <PlanBadge plan={me.plan} />
           </h1>
           <p className="text-[13px] text-fg-muted">Your personal account{me.isAdmin && ' · instance administrator'}</p>
         </div>
@@ -729,45 +722,6 @@ function NotificationsSection() {
   );
 }
 
-// ─── Referrals ─────────────────────────────────────────────────────────────
-
-function ReferralsSection() {
-  const q = useQuery({ queryKey: ['referrals'], queryFn: () => api.get<ReferralInfo>('/user/referrals') });
-  if (q.isLoading) return <PageSpinner />;
-  if (!q.data) return null;
-  const r = q.data;
-  const gb = (mb: number) => (mb >= 1024 ? `${Math.round((mb / 1024) * 10) / 10} GB` : `${mb} MB`);
-  return (
-    <>
-      <Panel title="Invite people" description={r.bonusPerReferralMb > 0 ? `Share your link. Each person who joins through it adds ${gb(r.bonusPerReferralMb)} of storage to your personal plan for ${r.bonusDays} days, up to ${gb(r.maxBonusMb)} at a time.` : 'Share your link with people who should be here.'}>
-        {!r.signupOpen && <Flash className="mb-3">Sign-up is closed on this instance, so the link only works once an administrator opens it.</Flash>}
-        <div className="flex gap-1">
-          <input readOnly value={r.link} aria-label="Your invite link" onFocus={(e) => e.target.select()} className="h-9 min-w-0 flex-1 rounded-sm border border-border bg-canvas-inset px-2 font-mono text-[13px]" />
-          <CopyButton value={r.link} size="md" />
-        </div>
-        {r.bonusPerReferralMb > 0 && (
-          <div className="mt-4 flex flex-wrap gap-8 text-[13px]">
-            <div><p className="text-xs text-fg-muted">Joined</p><p className="text-lg font-medium tabular-nums">{r.invited.length}</p></div>
-            <div><p className="text-xs text-fg-muted">Counted</p><p className="text-lg font-medium tabular-nums">{r.counted}</p></div>
-            <div><p className="text-xs text-fg-muted">Bonus storage now</p><p className="text-lg font-medium tabular-nums">{gb(r.bonusMb)}</p>{r.bonusExpiresAt && <p className="text-xs text-fg-subtle">first runs out <RelativeTime date={r.bonusExpiresAt} /></p>}</div>
-          </div>
-        )}
-        {!r.bonusApplies && r.bonusPerReferralMb > 0 && <p className="mt-2 text-xs text-fg-subtle">This instance does not limit storage, so the bonus is recorded but changes nothing yet.</p>}
-      </Panel>
-      {r.invited.length > 0 && (
-        <Panel title="People you invited">
-          {r.invited.map((u) => (
-            <KV key={u.username} k={u.username}>
-              Joined <RelativeTime date={u.joinedAt} />
-              {!u.counts ? <span className="ml-2 text-fg-subtle">(counts once they confirm their email)</span> : !u.active && <span className="ml-2 text-fg-subtle">(bonus ended)</span>}
-            </KV>
-          ))}
-        </Panel>
-      )}
-    </>
-  );
-}
-
 // ─── Sessions ──────────────────────────────────────────────────────────────
 
 function SessionsSection() {
@@ -1277,23 +1231,8 @@ const SECTIONS: Record<Section, () => ReactNode> = {
   'ssh-keys': () => <SshKeysSection />,
   repositories: () => <RepositoriesSection />,
   organizations: () => <OrganizationsSection />,
-  usage: () => <UsageSection />,
-  referrals: () => <ReferralsSection />,
   'security-log': () => <SecurityLogSection />,
 };
-
-function UsageSection() {
-  const { data: me } = useMe();
-  if (!me) return null;
-  return (
-    <>
-    <Panel title="Usage and plan" description="Storage, check minutes and seats used by your personal repositories. Organizations have their own, under their settings.">
-      <UsagePanel owner={me.username} />
-    </Panel>
-    <BillingPanel owner={me.username} />
-    </>
-  );
-}
 
 export function SettingsPage() {
   const { section = 'profile' } = useParams({ strict: false }) as { section?: string };

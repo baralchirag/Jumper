@@ -8,10 +8,7 @@ import { HttpError } from '../../lib/errors';
 import { audit } from '../audit/audit';
 import { createUser } from '../auth/routes';
 import { SCIM_TOKEN_PREFIX } from '../instance/routes';
-import { hasFeature } from '../license/license';
 import { findNamespace } from '../repos/access';
-import { assertOrgSeat } from '../usage/service';
-import { seatsChanged } from '../stripe/service';
 
 const USER_SCHEMA = 'urn:ietf:params:scim:schemas:core:2.0:User';
 const GROUP_SCHEMA = 'urn:ietf:params:scim:schemas:core:2.0:Group';
@@ -76,7 +73,6 @@ const scimRoutes: FastifyPluginAsync = async (app) => {
     if (!/^bearer$/i.test(scheme ?? '') || !token?.startsWith(SCIM_TOKEN_PREFIX)) throw new ScimError(401, 'A provisioning token is required. Create one in Admin, Directory sync.');
     const row = (await ctx.db.select().from(scimTokens).where(eq(scimTokens.tokenHash, sha256(token))).limit(1))[0];
     if (!row) throw new ScimError(401, 'That provisioning token is not valid');
-    if (!(await hasFeature(ctx, null, 'scim'))) throw new ScimError(403, 'SCIM provisioning is part of Enterprise and is not included in this instance\'s licence');
     void ctx.db.update(scimTokens).set({ lastUsedAt: new Date() }).where(eq(scimTokens.id, row.id)).catch(() => {});
   });
 
@@ -296,11 +292,7 @@ const scimRoutes: FastifyPluginAsync = async (app) => {
 
   const addMember = async (g: Awaited<ReturnType<typeof findGroup>>, userId: string) => {
     const u = await findUser(userId);
-    await assertOrgSeat(ctx, g.ns, u.id).catch((e: Error) => {
-      throw new ScimError(409, e.message);
-    });
     await ctx.db.insert(orgMembers).values({ orgId: g.org.id, userId: u.id, role: 'member' }).onConflictDoNothing();
-    seatsChanged(ctx, { orgId: g.org.id });
   };
 
   const removeMember = async (g: Awaited<ReturnType<typeof findGroup>>, userId: string) => {
@@ -308,7 +300,6 @@ const scimRoutes: FastifyPluginAsync = async (app) => {
     // The directory never removes the last owner: an organization nobody can run helps no one.
     if (owners.length === 1 && owners[0]!.userId === userId) return;
     await ctx.db.delete(orgMembers).where(and(eq(orgMembers.orgId, g.org.id), eq(orgMembers.userId, userId)));
-    seatsChanged(ctx, { orgId: g.org.id });
   };
 
   app.patch('/Groups/:id', async (req, reply) => {

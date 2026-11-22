@@ -4,12 +4,11 @@ import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'n
 import { join, relative } from 'node:path';
 import type { Redis } from 'ioredis';
 import yazl from 'yazl';
-import { artifacts, checkRuns, eq, namespaceUsage, namespaces, repositories, type Database } from '@jumper/db';
+import { artifacts, checkRuns, eq, namespaces, repositories, type Database } from '@jumper/db';
 import type { KicadCore, Pcb } from '@jumper/kicad-core/node';
 import {
   CHECK_STAGES,
   EVENTS_CHANNEL,
-  isPlanId,
   parseJumperConfig,
   type AnalyzeCommitJob,
   type ArtifactKind,
@@ -119,17 +118,6 @@ export class Analyzer {
       });
   }
 
-  /** A message when the owner has used this month's check minutes (only when plans are enforced), else null. */
-  private async minutesExhausted(repo: { namespaceId: string; plan: string; owner: string }): Promise<string | null> {
-    const { env } = this.deps;
-    if (!env.PLANS_ENFORCED) return null;
-    const plan = env.plans[isPlanId(repo.plan) ? repo.plan : 'free'];
-    if (plan.limits.checkMinutes === null) return null;
-    const used = (await namespaceUsage(this.deps.db, repo.namespaceId)).checkMinutes;
-    if (used < plan.limits.checkMinutes) return null;
-    return `Paused: ${repo.owner} has used all ${plan.limits.checkMinutes} check minutes on the ${plan.name} plan this month. Checks resume on the 1st (UTC); push again then, or ask an administrator for a bigger plan.`;
-  }
-
   /**
    * Analyze one commit for one lane. `checks` runs ERC, DRC and BOM (fast); `outputs` runs renders and exports (slow).
    * The two lanes are separate jobs on separate queues, so review feedback never waits behind a STEP export.
@@ -139,7 +127,7 @@ export class Analyzer {
     const mine = new Set<CheckName>(CHECK_STAGES[stage]);
     const repoRow = (
       await this.deps.db
-        .select({ id: repositories.id, namespaceId: repositories.namespaceId, plan: namespaces.plan, owner: namespaces.slug, defaultBranch: repositories.defaultBranch })
+        .select({ id: repositories.id, namespaceId: repositories.namespaceId, owner: namespaces.slug, defaultBranch: repositories.defaultBranch })
         .from(repositories)
         .innerJoin(namespaces, eq(namespaces.id, repositories.namespaceId))
         .where(eq(repositories.id, job.repoId))
@@ -147,12 +135,6 @@ export class Analyzer {
     )[0];
     if (!repoRow) {
       log.info('repository gone, skipping', { ...job });
-      return;
-    }
-    const minutesBlock = await this.minutesExhausted(repoRow);
-    if (minutesBlock) {
-      for (const name of mine) await this.setCheck(job, name, '', 'completed', { conclusion: 'skipped', summary: minutesBlock });
-      log.info('check minutes used up, skipping', { ...job, owner: repoRow.owner });
       return;
     }
     const repo = git.repoPath(env.reposDir, job.repoId);

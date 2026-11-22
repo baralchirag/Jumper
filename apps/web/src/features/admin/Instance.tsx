@@ -1,14 +1,10 @@
-// Instance administration for enterprise installs: version, licence, legal holds, retention,
-// directory provisioning (SCIM) and export clearance. Plus invoices for the hosted plans.
+// Instance administration: version, legal holds, retention, directory provisioning (SCIM) and export clearance.
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, RefreshCw, Trash2 } from 'lucide-react';
-import { DEFAULT_RETENTION, type Entitlements, type Feature, type InvoiceInfo, type InvoiceStatus, type LegalHoldInfo, type LicenseStatus, type RetentionSettings, type ScimTokenInfo, type VersionInfo } from '@jumper/shared';
-import { Box, BoxRow, Button, CopyButton, Flash, FormField, IconButton, Input, Label, PageSpinner, RelativeTime, Select, Textarea, cx } from '@jumper/ui';
-import { UnavailableNotice } from '../../shared/components/common';
+import { DEFAULT_RETENTION, type LegalHoldInfo, type RetentionSettings, type ScimTokenInfo, type VersionInfo } from '@jumper/shared';
+import { Box, BoxRow, Button, CopyButton, Flash, FormField, IconButton, Input, RelativeTime, Select, cx } from '@jumper/ui';
 import { api, errorMessage } from '../../shared/lib/api';
-import { money } from '../accounts/Governance';
 
 function Section({ title, description, action, children }: { title: string; description?: ReactNode; action?: ReactNode; children: ReactNode }) {
   return (
@@ -67,71 +63,6 @@ function VersionSection() {
         </Flash>
       )}
       {v.migrations.applied < v.migrations.expected && <Flash tone="danger" className="mt-4">The database is behind this build. Run the migrations (or start with AUTO_MIGRATE=true).</Flash>}
-    </Section>
-  );
-}
-
-// ─── Licence ──────────────────────────────────────────────────────────────
-
-type LicenseView = LicenseStatus & { source: 'env' | 'file' | 'admin' | null; enforced: boolean; host: string };
-
-function LicenseSection() {
-  const qc = useQueryClient();
-  const q = useQuery({ queryKey: ['admin-license'], queryFn: () => api.get<LicenseView>('/admin/instance/license') });
-  const ent = useQuery({ queryKey: ['admin-entitlements'], queryFn: () => api.get<Entitlements & { labels: Record<Feature, string>; plansEnforced: boolean }>('/admin/instance/entitlements') });
-  const [key, setKey] = useState('');
-  const { run, view } = useAct();
-  if (!q.data) return null;
-  const l = q.data;
-  const tone = l.state === 'valid' ? 'success' : l.state === 'grace' ? 'attention' : l.state === 'missing' ? 'default' : 'danger';
-  const refresh = (d: LicenseView) => {
-    qc.setQueryData(['admin-license'], d);
-    void qc.invalidateQueries({ queryKey: ['admin-entitlements'] });
-  };
-  return (
-    <Section title="Licence" description={ent.data?.plansEnforced ? 'This instance enforces hosted plans: features follow each owner\'s plan, and the licence is not used.' : 'Business and Enterprise features on this instance come from the licence.'} action={<Label tone={tone}>{l.state.replace('_', ' ')}</Label>}>
-      <p className="text-[13px]">{l.message}</p>
-      {l.license && (
-        <dl className="mt-3 grid grid-cols-[8rem_1fr] gap-y-1 text-[13px]">
-          <dt className="text-fg-muted">Licensee</dt><dd>{l.license.licensee}</dd>
-          <dt className="text-fg-muted">Tier</dt><dd className="capitalize">{l.license.tier}</dd>
-          <dt className="text-fg-muted">Domain</dt><dd className="font-mono">{l.license.domain} <span className="text-fg-subtle">(serving {l.host})</span></dd>
-          <dt className="text-fg-muted">Accounts</dt><dd>{l.seatsUsed} of {l.license.seats}</dd>
-          <dt className="text-fg-muted">Expires</dt><dd>{l.license.expires}{l.daysLeft !== null && <span className="text-fg-subtle"> ({l.daysLeft >= 0 ? `${l.daysLeft} days left` : `${-l.daysLeft} days ago`})</span>}</dd>
-          <dt className="text-fg-muted">Licence id</dt><dd className="font-mono text-xs">{l.license.id}</dd>
-        </dl>
-      )}
-      {ent.data && (
-        <div className="mt-4">
-          <p className="mb-2 text-xs text-fg-muted">Features available {ent.data.source === 'development' ? '(development instance: everything is unlocked)' : ''}</p>
-          <div className="flex flex-wrap gap-1.5">
-            {(Object.keys(ent.data.labels) as Feature[]).map((f) => (
-              <Label key={f} tone={ent.data.features.includes(f) ? 'success' : 'default'} className={cx(!ent.data.features.includes(f) && 'opacity-60')}>{ent.data.labels[f]}</Label>
-            ))}
-          </div>
-        </div>
-      )}
-      {l.source === 'env' || l.source === 'file' ? (
-        <p className="mt-4 text-xs text-fg-muted">Set on the server by {l.source === 'env' ? 'LICENSE_KEY' : 'LICENSE_FILE'}. Change it there.</p>
-      ) : (
-        <form
-          className="mt-4 space-y-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void run(async () => {
-              refresh(await api.put<LicenseView>('/admin/instance/license', { key }));
-              setKey('');
-            }, 'Licence installed.');
-          }}
-        >
-          <Textarea rows={3} value={key} onChange={(e) => setKey(e.target.value)} placeholder="JMP1…" aria-label="Licence key" className="font-mono text-xs" />
-          <div className="flex gap-2">
-            <Button type="submit" variant="primary" disabled={key.trim().length < 10}>{l.license ? 'Replace licence' : 'Install licence'}</Button>
-            {l.source === 'admin' && <Button variant="danger" onClick={() => confirm('Remove the licence? Business and Enterprise features stop working.') && void run(async () => refresh(await api.delete<LicenseView>('/admin/instance/license')))}>Remove</Button>}
-          </div>
-        </form>
-      )}
-      {view}
     </Section>
   );
 }
@@ -202,7 +133,6 @@ function RetentionSection() {
   if (!q.data) return null;
   return (
     <Section title="Retention" description="How long records are kept before the hourly clean-up deletes them. Empty means keep forever.">
-      {!q.data.editable && <UnavailableNotice message="Retention settings are part of Enterprise. The defaults below apply." />}
       {q.data.activeHolds > 0 && <p className="mb-3 text-[13px] text-attention">{q.data.activeHolds} legal hold{q.data.activeHolds === 1 ? ' is' : 's are'} in force: the audit log and held repositories are not cleaned while it lasts.</p>}
       <fieldset disabled={!q.data.editable} className="mt-3 grid gap-4 sm:grid-cols-2">
         {RETENTION_FIELDS.map((f) => (
@@ -311,89 +241,10 @@ export function InstanceAdmin() {
   return (
     <div className="max-w-4xl">
       <VersionSection />
-      <LicenseSection />
       <LegalHoldSection />
       <RetentionSection />
       <ScimSection />
       <ExportClearanceSection />
-    </div>
-  );
-}
-
-// ─── Invoices ─────────────────────────────────────────────────────────────
-
-export function InvoicesAdmin() {
-  const qc = useQueryClient();
-  const [status, setStatus] = useState<InvoiceStatus | ''>('');
-  const q = useQuery({ queryKey: ['admin-invoices', status], queryFn: () => api.get<InvoiceInfo[]>('/admin/invoices', { status: status || undefined }) });
-  const [owner, setOwner] = useState('');
-  const [desc, setDesc] = useState('');
-  const [amount, setAmount] = useState('');
-  const [tax, setTax] = useState('0');
-  const { run, view } = useAct();
-  const refresh = () => qc.invalidateQueries({ queryKey: ['admin-invoices'] });
-  return (
-    <div className="max-w-4xl">
-      <Section title="Raise an invoice" description="Leave the line empty to bill the owner's plan for its seats over one billing period (monthly or annual, as the owner chose).">
-        <form
-          className="grid gap-2 sm:grid-cols-[10rem_1fr_8rem_6rem_auto]"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void run(async () => {
-              const lines = desc.trim() ? [{ description: desc.trim(), quantity: 1, unitCents: Math.round(Number(amount) * 100) }] : [];
-              const inv = await api.post<InvoiceInfo>(`/admin/namespaces/${encodeURIComponent(owner.trim())}/invoices`, { lines, taxPercent: Number(tax) || 0 });
-              setDesc('');
-              setAmount('');
-              await refresh();
-              return inv;
-            }, 'Invoice raised.');
-          }}
-        >
-          <Input value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="Owner" aria-label="Owner" required />
-          <Input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Line (empty = plan for one period)" aria-label="Description" />
-          <Input type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount $" aria-label="Amount" required={Boolean(desc.trim())} disabled={!desc.trim()} />
-          <Input type="number" min={0} max={50} value={tax} onChange={(e) => setTax(e.target.value)} aria-label="Tax %" title="Tax %" />
-          <Button type="submit" variant="primary">Raise</Button>
-        </form>
-        {view}
-      </Section>
-      <Section
-        title="Invoices"
-        action={
-          <Select value={status} onChange={(e) => setStatus(e.target.value as InvoiceStatus | '')} className="h-8 w-32 text-[13px]" aria-label="Status">
-            <option value="">All</option>
-            <option value="open">Open</option>
-            <option value="paid">Paid</option>
-            <option value="draft">Draft</option>
-            <option value="void">Void</option>
-          </Select>
-        }
-      >
-        {q.isLoading ? (
-          <PageSpinner />
-        ) : !q.data?.length ? (
-          <p className="text-[13px] text-fg-muted">No invoices.</p>
-        ) : (
-          <Box>
-            {q.data.map((i) => (
-              <BoxRow key={i.id} className="flex flex-wrap items-center gap-3 text-[13px]">
-                <Link to="/billing/$owner/invoices/$id" params={{ owner: i.owner, id: i.id }} className="link font-mono">{i.number}</Link>
-                <span className="font-medium">{i.owner}</span>
-                <span className="text-fg-muted">{i.dueAt && <>due {i.dueAt.slice(0, 10)}</>}</span>
-                <span className="ml-auto tabular-nums">{money(i.totalCents)}</span>
-                <Label tone={i.status === 'paid' ? 'success' : i.status === 'open' ? 'attention' : 'default'}>{i.status}</Label>
-                {i.status !== 'void' && i.status !== 'paid' && (
-                  <>
-                    {i.status === 'draft' && <Button size="sm" onClick={() => void run(async () => { await api.patch(`/admin/invoices/${i.id}`, { status: 'open' }); await refresh(); })}>Issue</Button>}
-                    <Button size="sm" onClick={() => void run(async () => { await api.patch(`/admin/invoices/${i.id}`, { status: 'paid' }); await refresh(); })}>Mark paid</Button>
-                    <Button size="sm" variant="danger" onClick={() => confirm(`Void ${i.number}?`) && void run(async () => { await api.patch(`/admin/invoices/${i.id}`, { status: 'void' }); await refresh(); })}>Void</Button>
-                  </>
-                )}
-              </BoxRow>
-            ))}
-          </Box>
-        )}
-      </Section>
     </div>
   );
 }

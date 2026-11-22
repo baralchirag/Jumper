@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolveDataPath } from '@jumper/shared/node';
-import { resolvePlans, type Plan, type PlanId } from '@jumper/shared';
 import { z } from 'zod';
 
 const envSchema = z.object({
@@ -39,16 +38,12 @@ const envSchema = z.object({
   WORKER_KICAD_FOOTPRINT_DIR: z.string().default('/usr/share/kicad/footprints'),
   /** Scratch space for checkouts. Must be visible to kicad-cli (shared with the host in Flatpak mode). */
   WORKER_TMP_DIR: z.string().optional(),
-  /** Same as the API: pause checks for owners over their monthly check minutes. */
-  PLANS_ENFORCED: z.stringbool().default(false),
-  PLAN_LIMITS: z.string().optional(),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
 });
 
 export type WorkerEnv = z.output<typeof envSchema> & {
   reposDir: string;
   tmpDir: string;
-  plans: Record<PlanId, Plan>;
   /** Run kicad-cli on the Flatpak host (flatpak-spawn --host). */
   hostSpawn: boolean;
 };
@@ -63,11 +58,5 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): WorkerEnv {
   const hostSpawn = (d.WORKER_SANDBOX === 'none' || d.WORKER_SANDBOX === 'auto') && (d.KICAD_CLI === 'host' || (d.KICAD_CLI === 'auto' && inFlatpak()));
   // The Flatpak sandbox has a private /tmp, so host-side kicad-cli needs a shared scratch dir.
   const tmpDir = d.WORKER_TMP_DIR ? resolveDataPath(d.WORKER_TMP_DIR) : hostSpawn ? resolveDataPath('./data/tmp') : tmpdir();
-  let overrides: unknown;
-  try {
-    overrides = d.PLAN_LIMITS ? JSON.parse(d.PLAN_LIMITS) : undefined;
-  } catch {
-    throw new Error('PLAN_LIMITS must be JSON, e.g. {"free":{"checkMinutes":1000}}');
-  }
-  return { ...d, reposDir: resolveDataPath(d.REPOS_DIR), tmpDir, hostSpawn, plans: resolvePlans(overrides) };
+  return { ...d, reposDir: resolveDataPath(d.REPOS_DIR), tmpDir, hostSpawn };
 }

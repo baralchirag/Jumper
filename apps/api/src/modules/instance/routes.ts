@@ -1,16 +1,14 @@
-// Instance-level administration for self-hosted and enterprise installs: the licence, legal holds, retention,
-// directory provisioning tokens, export clearance and the version check.
+// Instance administration: legal holds, retention, directory provisioning tokens, export clearance and the version check.
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { desc, eq, isNull, legalHolds, namespaces, repositories, scimTokens, users } from '@jumper/db';
-import { FEATURE_LABELS, legalHoldSchema, retentionSchema, type Entitlements, type LegalHoldInfo, type LicenseStatus, type RetentionSettings, type ScimTokenInfo, type VersionInfo } from '@jumper/shared';
+import { legalHoldSchema, retentionSchema, type LegalHoldInfo, type RetentionSettings, type ScimTokenInfo, type VersionInfo } from '@jumper/shared';
 import { randomToken, sha256 } from '../../lib/crypto';
-import { badRequest, conflict, notFound } from '../../lib/errors';
+import { notFound } from '../../lib/errors';
 import { usersById } from '../_shared/people';
 import { adminOnly } from '../admin/routes';
 import { audit } from '../audit/audit';
 import { requireUser } from '../auth/plugin';
-import { clearLicenseCache, entitlementsFor, evaluateLicense, installedKey, licenseStatus, requireFeature, saveLicense } from '../license/license';
 import { findNamespace, findRepo } from '../repos/access';
 import { toUserSummary } from '../repos/serialize';
 import { retentionSettings, setSetting } from './settings';
@@ -26,42 +24,6 @@ export const versionRoutes: FastifyPluginAsyncZod = async (app) => {
 const instanceRoutes: FastifyPluginAsyncZod = async (app) => {
   const ctx = app.ctx;
   app.addHook('onRequest', adminOnly);
-
-  app.get('/entitlements', async (): Promise<Entitlements & { labels: typeof FEATURE_LABELS; plansEnforced: boolean }> => ({
-    ...(await entitlementsFor(ctx, null)),
-    labels: FEATURE_LABELS,
-    plansEnforced: ctx.env.PLANS_ENFORCED,
-  }));
-
-  // ---------- licence ----------
-
-  const licenseView = async (): Promise<LicenseStatus & { source: 'env' | 'file' | 'admin' | null; enforced: boolean; host: string }> => {
-    const [{ source }, status] = await Promise.all([installedKey(ctx), licenseStatus(ctx, true)]);
-    return { ...status, source, enforced: ctx.env.licenseEnforced, host: new URL(ctx.env.PUBLIC_URL).hostname };
-  };
-
-  app.get('/license', licenseView);
-
-  app.put('/license', { schema: { body: z.object({ key: z.string().trim().min(10).max(8000) }) } }, async (req) => {
-    const { source } = await installedKey(ctx);
-    if (source === 'env' || source === 'file') throw conflict(`The licence is set by ${source === 'env' ? 'LICENSE_KEY' : 'LICENSE_FILE'} on the server and cannot be replaced here`);
-    const testKey = ctx.env.NODE_ENV !== 'production' ? ctx.env.LICENSE_PUBLIC_KEY : undefined;
-    // Check before saving, so a mistyped key never replaces a working one.
-    const judged = evaluateLicense(req.body.key, new URL(ctx.env.PUBLIC_URL).hostname, 0, new Date(), testKey);
-    if (judged.state === 'invalid' || judged.state === 'wrong_domain') throw badRequest(judged.message);
-    await saveLicense(ctx, req.body.key);
-    await audit(req, 'admin.license.install', undefined, { id: judged.license?.id, licensee: judged.license?.licensee, expires: judged.license?.expires });
-    return licenseView();
-  });
-
-  app.delete('/license', async (req) => {
-    const { source } = await installedKey(ctx);
-    if (source === 'env' || source === 'file') throw conflict('The licence is set on the server and cannot be removed here');
-    await saveLicense(ctx, null);
-    clearLicenseCache();
-    await audit(req, 'admin.license.remove');
-    return licenseView();
-  });
 
   // ---------- legal holds ----------
 
@@ -91,7 +53,6 @@ const instanceRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.post('/legal-holds', { schema: { body: legalHoldSchema } }, async (req) => {
     const user = requireUser(req);
-    await requireFeature(ctx, null, 'legal_hold');
     const [owner, repo] = req.body.target.split('/');
     let values: { namespaceId?: string; repoId?: string };
     if (repo) {
@@ -120,13 +81,11 @@ const instanceRoutes: FastifyPluginAsyncZod = async (app) => {
   // ---------- retention ----------
 
   app.get('/retention', async (): Promise<{ settings: RetentionSettings; editable: boolean; activeHolds: number }> => {
-    const e = await entitlementsFor(ctx, null);
     const holds = await ctx.db.select({ id: legalHolds.id }).from(legalHolds).where(isNull(legalHolds.releasedAt));
-    return { settings: await retentionSettings(ctx), editable: e.features.includes('retention'), activeHolds: holds.length };
+    return { settings: await retentionSettings(ctx), editable: true, activeHolds: holds.length };
   });
 
   app.put('/retention', { schema: { body: retentionSchema } }, async (req) => {
-    await requireFeature(ctx, null, 'retention');
     await setSetting(ctx, 'retention', req.body);
     await audit(req, 'admin.retention.update', undefined, req.body);
     return { settings: req.body };
@@ -141,7 +100,6 @@ const instanceRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.post('/scim/tokens', { schema: { body: z.object({ name: z.string().trim().min(1).max(80) }) } }, async (req) => {
     const user = requireUser(req);
-    await requireFeature(ctx, null, 'scim');
     const token = SCIM_TOKEN_PREFIX + randomToken(32);
     await ctx.db.insert(scimTokens).values({ name: req.body.name, tokenHash: sha256(token), createdBy: user.id });
     await audit(req, 'admin.scim_token.create', undefined, { name: req.body.name });
@@ -158,7 +116,6 @@ const instanceRoutes: FastifyPluginAsyncZod = async (app) => {
   // ---------- export clearance ----------
 
   app.put('/users/:id/export-clearance', { schema: { params: z.object({ id: z.uuid() }), body: z.object({ cleared: z.boolean() }) } }, async (req) => {
-    if (req.body.cleared) await requireFeature(ctx, null, 'export_control');
     const [u] = await ctx.db.update(users).set({ exportCleared: req.body.cleared, updatedAt: new Date() }).where(eq(users.id, req.params.id)).returning();
     if (!u) throw notFound();
     await audit(req, req.body.cleared ? 'admin.export_clearance.grant' : 'admin.export_clearance.revoke', { type: 'user', id: u.id }, { username: u.username });

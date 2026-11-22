@@ -1,14 +1,12 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { eq, namespaces, orgMembers, organizations, sql, users, type User } from '@jumper/db';
-import { isPlanId, loginSchema, registerSchema, type CurrentUser } from '@jumper/shared';
+import { loginSchema, registerSchema, type CurrentUser } from '@jumper/shared';
 import { burnPasswordCheck, hashPassword, verifyPassword } from './passwords';
 import { endSession, startSession } from './plugin';
 import { randomToken, safeEqual } from '../../lib/crypto';
 import { HttpError, badRequest, conflict, forbidden, unauthorized } from '../../lib/errors';
-import { assertLicenseSeat } from '../license/license';
 import { checkSecondFactor } from './two-factor';
-import { resolveReferrer } from '../referrals/service';
 import { publicProviders } from '../sso/providers';
 import { findNamespace } from '../repos/access';
 import { audit } from '../audit/audit';
@@ -23,7 +21,6 @@ export async function currentUser(ctx: Ctx, user: User): Promise<CurrentUser> {
     .innerJoin(organizations, eq(organizations.id, orgMembers.orgId))
     .innerJoin(namespaces, eq(namespaces.orgId, organizations.id))
     .where(eq(orgMembers.userId, user.id));
-  const own = (await ctx.db.select({ plan: namespaces.plan }).from(namespaces).where(eq(namespaces.userId, user.id)).limit(1))[0];
   return {
     id: user.id,
     username: user.username,
@@ -45,16 +42,14 @@ export async function currentUser(ctx: Ctx, user: User): Promise<CurrentUser> {
     twoFactor: user.totpEnabledAt !== null,
     exportCleared: user.exportCleared,
     orgs,
-    plan: isPlanId(own?.plan) ? own.plan : 'free',
   };
 }
 
 /** Create a user and their namespace in one transaction. */
 export async function createUser(
   ctx: Ctx,
-  data: { username: string; email: string; passwordHash: string | null; name?: string | null; avatarUrl?: string | null; githubId?: string | null; emailVerified?: boolean; externalId?: string | null; scimManaged?: boolean; referredBy?: string | null },
+  data: { username: string; email: string; passwordHash: string | null; name?: string | null; avatarUrl?: string | null; githubId?: string | null; emailVerified?: boolean; externalId?: string | null; scimManaged?: boolean },
 ): Promise<User> {
-  await assertLicenseSeat(ctx);
   if (await findNamespace(ctx, data.username)) throw conflict('That username is taken');
   const taken = await ctx.db.select({ id: users.id }).from(users).where(sql`lower(${users.email}) = lower(${data.email})`).limit(1);
   if (taken[0]) throw conflict('An account with that email already exists');
@@ -62,7 +57,7 @@ export async function createUser(
     // Never auto-promote: admin is granted only from the server shell (`pnpm admin:grant <username>`).
     const [user] = await tx
       .insert(users)
-      .values({ username: data.username, email: data.email, passwordHash: data.passwordHash, name: data.name, avatarUrl: data.avatarUrl, githubId: data.githubId, externalId: data.externalId ?? null, scimManaged: data.scimManaged ?? false, referredBy: data.referredBy ?? null, isAdmin: false, emailVerifiedAt: data.emailVerified ? new Date() : null })
+      .values({ username: data.username, email: data.email, passwordHash: data.passwordHash, name: data.name, avatarUrl: data.avatarUrl, githubId: data.githubId, externalId: data.externalId ?? null, scimManaged: data.scimManaged ?? false, isAdmin: false, emailVerifiedAt: data.emailVerified ? new Date() : null })
       .returning();
     await tx.insert(namespaces).values({ slug: data.username, kind: 'user', userId: user!.id });
     return user!;
@@ -75,12 +70,10 @@ const authRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.post('/register', { ...strict, schema: { body: registerSchema } }, async (req, reply) => {
     if (!ctx.env.ALLOW_SIGNUP) throw forbidden('Sign-up is disabled on this instance');
-    const referrer = await resolveReferrer(ctx, req.body.ref);
     const user = await createUser(ctx, {
       username: req.body.username,
       email: req.body.email,
       passwordHash: await hashPassword(req.body.password),
-      referredBy: referrer?.id ?? null,
     });
     await sendVerification(ctx, user, (m) => req.log.warn(m));
     await startSession(req, reply, user.id);

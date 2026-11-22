@@ -14,7 +14,6 @@ import { GitRepo } from '../git/repo';
 import { friendlyGitError, resolveRemote } from '../import/service';
 import { repoDiskPath } from '../repos/access';
 import { diffRefs, handleRefUpdates } from '../repos/push';
-import { pushRefusal } from '../usage/service';
 
 const running = new Set<string>();
 const MIRROR_TIMEOUT_MS = 10 * 60_000;
@@ -104,8 +103,6 @@ async function syncOnce(ctx: Ctx, m: RepoMirror, log?: FastifyBaseLogger): Promi
   const remote = target.url.toString();
 
   if (m.direction === 'pull') {
-    const refusal = await pushRefusal(ctx, repo.namespaceId);
-    if (refusal) return { ok: false, updated: 0, error: refusal };
     const before = await gr.refs();
     const plus = m.overwrite ? '+' : '';
     let stderr = '';

@@ -1,80 +1,9 @@
-// Wire types for the retention, business and enterprise features: stock alerts, templates,
-// single sign-on, two-factor login, roles, organization policies, invoices, licensing, SCIM, legal hold,
-// export control and compliance reports.
+// Wire types for stock alerts, templates, single sign-on, two-factor login, roles, organization policies,
+// SCIM, legal hold, export control and compliance reports.
 import { z } from 'zod';
 import { CUSTOM_ROLE_CAPS, REPO_ROLES, type Capability, type RepoRole } from './constants';
-import { BILLING_CYCLES, type BillingCycle, type PlanId } from './plans';
 import type { Lifecycle, Supplier } from './pricing';
 import type { UserSummary } from './schemas';
-
-// ---------- entitlements ----------
-
-/** Features that need the Business plan (hosted) or a licence (self-hosted). */
-export const BUSINESS_FEATURES = ['sso', 'custom_roles', 'org_policies', 'audit_export', 'security_policies'] as const;
-/** Features that need the Enterprise plan or an enterprise licence. */
-export const ENTERPRISE_FEATURES = ['saml', 'scim', 'legal_hold', 'export_control', 'compliance', 'retention'] as const;
-export const FEATURES = [...BUSINESS_FEATURES, ...ENTERPRISE_FEATURES] as const;
-export type Feature = (typeof FEATURES)[number];
-
-export const FEATURE_LABELS: Record<Feature, string> = {
-  sso: 'Single sign-on (Google, Microsoft, OIDC)',
-  custom_roles: 'Custom roles',
-  org_policies: 'Organization-wide policies',
-  audit_export: 'Audit log export',
-  security_policies: 'Required two-factor login, IP allowlists, session timeouts',
-  saml: 'SAML single sign-on',
-  scim: 'SCIM user provisioning',
-  legal_hold: 'Legal hold',
-  export_control: 'Export-controlled repositories',
-  compliance: 'RoHS and REACH reports',
-  retention: 'Data retention settings',
-};
-
-/** Features included in a hosted plan. */
-export function planFeatures(plan: PlanId): Feature[] {
-  if (plan === 'enterprise') return [...FEATURES];
-  if (plan === 'team') return [...BUSINESS_FEATURES];
-  return [];
-}
-
-export interface Entitlements {
-  /** `plan` on a hosted instance that enforces plans; `license` on a licensed self-hosted one; `development` otherwise. */
-  source: 'plan' | 'license' | 'development' | 'none';
-  features: Feature[];
-  /** Why features are missing, in words for the upgrade notice. */
-  reason: string | null;
-}
-
-// ---------- licence ----------
-
-export interface LicensePayload {
-  /** Licence id, for support. */
-  id: string;
-  licensee: string;
-  /** Host name the instance must be served from (PUBLIC_URL); `*.example.com` allows sub-domains. */
-  domain: string;
-  /** Active accounts allowed. */
-  seats: number;
-  /** ISO dates. */
-  issued: string;
-  expires: string;
-  tier: 'business' | 'enterprise';
-  /** Extra features beyond the tier, if any. */
-  features?: Feature[];
-}
-
-export type LicenseState = 'valid' | 'grace' | 'expired' | 'invalid' | 'wrong_domain' | 'missing';
-
-export interface LicenseStatus {
-  state: LicenseState;
-  /** Human-readable explanation of the state. */
-  message: string;
-  license: LicensePayload | null;
-  seatsUsed: number;
-  /** Days until expiry (negative once expired). */
-  daysLeft: number | null;
-  features: Feature[];
-}
 
 // ---------- two-factor login ----------
 
@@ -243,102 +172,6 @@ export const DEFAULT_ORG_POLICY: OrgPolicy = orgPolicySchema.parse({});
 /** Why the current session cannot reach an organization's private work, for the notice shown instead. */
 export type AccessDenial = 'two_factor' | 'ip' | 'session_age' | 'sso';
 
-// ---------- billing ----------
-
-export const billingProfileSchema = z.object({
-  cycle: z.enum(BILLING_CYCLES).default('monthly'),
-  email: z.union([z.email(), z.literal('')]).default(''),
-  company: z.string().trim().max(200).default(''),
-  address: z.string().trim().max(600).default(''),
-  taxId: z.string().trim().max(60).default(''),
-  /** Purchase-order number printed on invoices. */
-  poNumber: z.string().trim().max(60).default(''),
-});
-export type BillingProfile = z.output<typeof billingProfileSchema>;
-
-export const INVOICE_STATUSES = ['draft', 'open', 'paid', 'void'] as const;
-export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
-
-export const invoiceLineSchema = z.object({
-  description: z.string().trim().min(1).max(200),
-  quantity: z.number().int().min(1).max(100_000),
-  unitCents: z.number().int().min(0).max(100_000_000),
-});
-
-export const createInvoiceSchema = z.object({
-  /** Leave empty to bill the owner's plan for its seats over one period. */
-  lines: z.array(invoiceLineSchema).max(50).default([]),
-  /** Tax rate in percent. */
-  taxPercent: z.number().min(0).max(50).default(0),
-  dueInDays: z.number().int().min(0).max(120).default(30),
-  notes: z.string().trim().max(1000).default(''),
-  status: z.enum(['draft', 'open']).default('open'),
-});
-
-export interface InvoiceInfo {
-  id: string;
-  number: string;
-  owner: string;
-  status: InvoiceStatus;
-  currency: 'USD';
-  lines: { description: string; quantity: number; unitCents: number; totalCents: number }[];
-  subtotalCents: number;
-  taxPercent: number;
-  taxCents: number;
-  totalCents: number;
-  periodStart: string;
-  periodEnd: string;
-  issuedAt: string | null;
-  dueAt: string | null;
-  paidAt: string | null;
-  notes: string;
-  billTo: BillingProfile;
-  /** Who issued it (the operator of this instance). */
-  from: { name: string | null; email: string | null };
-  /** Card invoices come from Stripe and have Stripe's own page and PDF; manual ones are printed from this site. */
-  source: 'manual' | 'stripe';
-  hostedUrl: string | null;
-  pdfUrl: string | null;
-}
-
-/** Plans that can be bought by card. Free needs no payment; Enterprise is quoted. */
-export const CARD_PLANS = ['pro', 'team'] as const;
-export type CardPlanId = (typeof CARD_PLANS)[number];
-
-export const checkoutSchema = z.object({
-  plan: z.enum(CARD_PLANS),
-  cycle: z.enum(BILLING_CYCLES),
-  /** Where "back" on Stripe's page returns to: the pricing page or the billing settings. */
-  from: z.enum(['pricing', 'billing']).default('billing'),
-});
-
-export interface SubscriptionInfo {
-  /** Stripe's status: active, trialing, past_due, unpaid, canceled, incomplete, incomplete_expired, paused. */
-  status: string;
-  plan: PlanId;
-  cycle: BillingCycle;
-  /** Seats being billed (Stripe quantity). */
-  quantity: number;
-  /** End of the period already paid for (ISO). */
-  periodEnd: string | null;
-  cancelAtPeriodEnd: boolean;
-}
-
-export interface BillingInfo {
-  owner: string;
-  plan: PlanId;
-  profile: BillingProfile;
-  seats: number;
-  /** Price of the next period at list price, in cents; null when the plan is quoted individually. */
-  nextPeriodCents: number | null;
-  cycle: BillingCycle;
-  invoices: InvoiceInfo[];
-  /** Card payments are available on this instance. */
-  cardPayments: boolean;
-  /** The card subscription, when this owner pays by card. */
-  subscription: SubscriptionInfo | null;
-}
-
 // ---------- stock and end-of-life alerts ----------
 
 export const BOM_ALERT_KINDS = ['out_of_stock', 'low_stock', 'eol', 'not_found'] as const;
@@ -410,8 +243,6 @@ export interface ComplianceReport {
   usedSuppliers: boolean;
 }
 
-// ---------- insights ----------
-
 // ---------- templates ----------
 
 export interface RepoTemplateInfo {
@@ -454,8 +285,6 @@ export const retentionSchema = z.object({
 export type RetentionSettings = z.output<typeof retentionSchema>;
 export const DEFAULT_RETENTION: RetentionSettings = retentionSchema.parse({});
 
-// ---------- release records ----------
-
 // ---------- version ----------
 
 export interface VersionInfo {
@@ -478,74 +307,4 @@ export interface ScimTokenInfo {
   name: string;
   lastUsedAt: string | null;
   createdAt: string;
-}
-
-// ---------- admin: paying customers ----------
-
-/** How a customer pays: by card (Stripe), by invoice, or a plan assigned by an administrator with nothing billed yet. */
-export type PaymentMethod = 'card' | 'invoice' | 'assigned';
-
-export interface AdminCustomerRow {
-  owner: string;
-  kind: 'user' | 'org';
-  /** Display name: the person's name or the organization's. */
-  name: string | null;
-  avatarUrl: string | null;
-  /** The person, or the organization's owners, to contact about billing. */
-  contactEmails: string[];
-  plan: PlanId;
-  cycle: BillingCycle;
-  method: PaymentMethod;
-  /** Stripe subscription status when paying by card. */
-  status: string | null;
-  /** When the subscription (or the first paid invoice) started. */
-  startedAt: string | null;
-  /** Paid until. */
-  paidThrough: string | null;
-  cancelAtPeriodEnd: boolean;
-  seats: number;
-  /** Recurring revenue at list price, per month (annual plans divided by 12), in cents. */
-  mrrCents: number;
-  totalPaidCents: number;
-  invoicesPaid: number;
-  lastPaymentAt: string | null;
-  lastPaymentCents: number | null;
-  /** Open (unpaid) invoices and their total. */
-  openCents: number;
-  createdAt: string;
-}
-
-export interface AdminCustomers {
-  rows: AdminCustomerRow[];
-  totals: { paying: number; mrrCents: number; arrCents: number; collectedCents: number; openCents: number; pastDue: number; cancelling: number };
-  /** True when the server has Stripe keys; links to the Stripe dashboard are then shown. */
-  stripe: boolean;
-}
-
-export interface AdminCustomerDetail extends AdminCustomerRow {
-  profile: {
-    username?: string;
-    email?: string;
-    emailVerified?: boolean;
-    bio?: string | null;
-    company?: string | null;
-    location?: string | null;
-    website?: string | null;
-    twoFactor?: boolean;
-    disabled?: boolean;
-    lastSignInAt?: string | null;
-    description?: string | null;
-  };
-  billingProfile: BillingProfile;
-  stripeCustomerId: string | null;
-  stripeSubscriptionId: string | null;
-  /** Link to the customer in the Stripe dashboard (test or live, from the key). */
-  stripeDashboardUrl: string | null;
-  members: { username: string; name: string | null; email: string; role: string }[];
-  repositories: number;
-  storageBytes: number;
-  checkMinutes: number;
-  invoices: InvoiceInfo[];
-  /** Billing events from the security log: checkouts, plan changes, cancellations, invoices raised. */
-  events: { at: string; action: string; actor: string | null; detail: Record<string, unknown> }[];
 }

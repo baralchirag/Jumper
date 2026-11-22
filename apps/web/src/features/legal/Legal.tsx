@@ -6,15 +6,13 @@ import { Markdown } from '../../shared/components/Markdown';
 import { PageContainer } from '../../shared/components/common';
 import { useMe } from '../../shared/lib/queries';
 import privacy from './content/privacy.md?raw';
-import refunds from './content/refunds.md?raw';
 import terms from './content/terms.md?raw';
 
-export type LegalDoc = 'terms' | 'privacy' | 'refunds';
+export type LegalDoc = 'terms' | 'privacy';
 
 const DOCS: { id: LegalDoc; title: string; source: string }[] = [
   { id: 'terms', title: 'Terms of service', source: terms },
   { id: 'privacy', title: 'Privacy policy', source: privacy },
-  { id: 'refunds', title: 'Refund policy', source: refunds },
 ];
 
 import { useSite } from '../../shared/lib/queries';
@@ -66,7 +64,7 @@ function LegalPage({ doc }: { doc: LegalDoc }) {
           <Flash tone="warning" className="mb-8">
             This instance has not published its operator details. Set <code className="font-mono text-[0.9em]">OPERATOR_NAME</code>,{' '}
             <code className="font-mono text-[0.9em]">OPERATOR_EMAIL</code> and <code className="font-mono text-[0.9em]">OPERATOR_JURISDICTION</code> on the API, and
-            have these policies reviewed for your situation before you take payments.
+            have these policies reviewed for your situation.
           </Flash>
         )}
         <p className="mb-3 font-mono text-xs text-fg-subtle">
@@ -80,4 +78,3 @@ function LegalPage({ doc }: { doc: LegalDoc }) {
 
 export const TermsPage = () => <LegalPage doc="terms" />;
 export const PrivacyPage = () => <LegalPage doc="privacy" />;
-export const RefundsPage = () => <LegalPage doc="refunds" />;

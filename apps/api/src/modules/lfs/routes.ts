@@ -1,20 +1,17 @@
 // Git LFS server (batch API + basic transfer) for large binaries in hardware repos: STEP models, datasheets, photos.
 // https://github.com/git-lfs/git-lfs/blob/main/docs/api/batch.md
 //
-// Objects are stored per repository under repos/<id>/lfs/, count towards the owner's storage, and uploads are refused
-// up front when they would exceed the plan's storage limit (when limits are enforced).
+// Objects are stored per repository under repos/<id>/lfs/.
 import { createHash } from 'node:crypto';
 import { PassThrough, type Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { and, eq, inArray, lfsObjects, repositories, users, type Namespace, type Repository, type User } from '@jumper/db';
-import { ROLE_RANK, overLimit, type RepoRole } from '@jumper/shared';
+import { ROLE_RANK, type RepoRole } from '@jumper/shared';
 import { signToken, verifyToken } from '../../lib/secrets';
 import { UNVERIFIED_MESSAGE, mustVerify } from '../auth/verify';
 import { basicAuth, challenge, scopeAllows } from '../git/http';
 import { findRepo, permissionFor } from '../repos/access';
-import { usageFor } from '../usage/service';
-import { effectivePlan } from '../referrals/service';
 
 const LFS_TYPE = 'application/vnd.git-lfs+json';
 const OID = /^[0-9a-f]{64}$/;
@@ -147,17 +144,6 @@ export async function lfsRoutes(app: FastifyInstance) {
       : [];
     const have = new Map(stored.map((s) => [s.oid, s]));
     const own = new Set(stored.filter((s) => s.repoId === access.repo.id).map((s) => s.oid));
-
-    if (b.operation === 'upload') {
-      const incoming = valid.filter((o) => !own.has(o.oid) && o.size <= maxBytes).reduce((n, o) => n + o.size, 0);
-      if (incoming > 0 && ctx.env.PLANS_ENFORCED) {
-        const usage = await usageFor(ctx, access.repo.namespaceId);
-        const plan = await effectivePlan(ctx, access.ns);
-        if (overLimit('storage', usage, plan.limits, incoming)) {
-          return lfsError(reply, 507, `These files would exceed the storage included in the ${plan.name} plan for ${access.ns.slug}. Free up space or ask an administrator to change the plan.`);
-        }
-      }
-    }
 
     const header: Record<string, string> = req.headers.authorization ? { Authorization: req.headers.authorization } : {};
     const objects = b.objects.map((o) => {

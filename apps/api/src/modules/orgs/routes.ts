@@ -3,14 +3,12 @@ import { z } from 'zod';
 import { and, eq, namespaces, orgMembers, organizations, repositories, sql, users } from '@jumper/db';
 import { createOrgSchema, orgMemberSchema } from '@jumper/shared';
 import { requireScope, requireUser } from '../auth/plugin';
-import { HttpError, badRequest, conflict, forbidden, notFound } from '../../lib/errors';
+import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
 import { findNamespace, orgRoleFor } from '../repos/access';
 import { audit } from '../audit/audit';
 import { purgeRepoData } from '../repos/purge';
-import { assertOrgSeat } from '../usage/service';
 import { resolveRoleRef } from '../roles/service';
 import { assertNamespaceNotHeld } from '../legal/holds';
-import { seatsChanged } from '../stripe/service';
 
 const orgRoutes: FastifyPluginAsyncZod = async (app) => {
   const ctx = app.ctx;
@@ -24,13 +22,6 @@ const orgRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post('/', { schema: { body: createOrgSchema } }, async (req) => {
     const user = requireUser(req);
     requireScope(req, 'admin');
-    // On the hosted service, organizations are for paying customers. Self-hosted instances (no plan limits) are unaffected.
-    if (ctx.env.PLANS_ENFORCED && !user.isAdmin) {
-      const own = (await ctx.db.select({ plan: namespaces.plan }).from(namespaces).where(eq(namespaces.userId, user.id)).limit(1))[0];
-      if (!own || own.plan === 'free') {
-        throw new HttpError(402, 'plan_required', 'Organizations are part of paid plans. Upgrade to Pro, or contact us to set up Business for your team.');
-      }
-    }
     if (await findNamespace(ctx, req.body.slug)) throw conflict('That name is taken');
     const org = await ctx.db.transaction(async (tx) => {
       const [org] = await tx.insert(organizations).values({ name: req.body.name, description: req.body.description }).returning();
@@ -53,14 +44,12 @@ const orgRoutes: FastifyPluginAsyncZod = async (app) => {
       const target = (await ctx.db.select().from(users).where(sql`lower(${users.username}) = lower(${req.body.username})`).limit(1))[0];
       if (!target) throw notFound('User not found');
       const orgNs = await findNamespace(ctx, req.params.org);
-      if (orgNs) await assertOrgSeat(ctx, orgNs, target.id);
       const grant = req.body.repoRole && orgNs ? await resolveRoleRef(ctx, orgNs, req.body.repoRole) : null;
       const roleCols = grant ? { repoRole: grant.role, customRoleId: grant.customRoleId } : {};
       await ctx.db
         .insert(orgMembers)
         .values({ orgId, userId: target.id, role: req.body.role, ...roleCols })
         .onConflictDoUpdate({ target: [orgMembers.orgId, orgMembers.userId], set: { role: req.body.role, ...roleCols } });
-      seatsChanged(ctx, { orgId });
       await audit(req, 'org.member.set', { type: 'org', id: orgId }, { user: target.username, role: req.body.role });
       return { ok: true };
     },
@@ -83,7 +72,6 @@ const orgRoutes: FastifyPluginAsyncZod = async (app) => {
         .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.role, 'owner')));
       if (owners.length === 1 && owners[0]!.userId === target.id) throw conflict('An organization needs at least one owner');
       await ctx.db.delete(orgMembers).where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, target.id)));
-      seatsChanged(ctx, { orgId });
       await audit(req, 'org.member.remove', { type: 'org', id: orgId }, { user: target.username });
       return { ok: true };
     },

@@ -70,7 +70,7 @@ function General() {
         checked={form.exportControlled}
         onChange={(e) => setForm({ ...form, exportControlled: e.target.checked, visibility: e.target.checked ? 'private' : form.visibility })}
         label="Export-controlled"
-        hint="Only people an administrator has cleared can see this repository, administrators included. It must stay private. Part of Enterprise."
+        hint="Only people an administrator has cleared can see this repository, administrators included. It must stay private."
       />
       <Button type="submit" variant="primary" loading={busy}>
         Save changes

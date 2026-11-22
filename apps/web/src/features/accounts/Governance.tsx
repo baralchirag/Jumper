@@ -1,22 +1,15 @@
-// Owner governance screens: repository roles for members, custom roles, organization policy, single sign-on,
-// the audit log and billing. Shown inside organization settings (and billing in personal settings too).
+// Owner governance screens: repository roles for members, custom roles, organization policy, single sign-on
+// and the audit log. Shown inside organization settings.
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Download, FileText, Plus, Receipt, ShieldCheck, Trash2 } from 'lucide-react';
+import { Download, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import {
   CAPABILITY_LABELS,
   CUSTOM_ROLE_CAPS,
   DEFAULT_ORG_POLICY,
-  DEFAULT_PLANS,
   REPO_ROLES,
   ROLE_LABELS,
-  type BillingCycle,
-  type BillingInfo,
-  type BillingProfile,
   type CustomRoleInfo,
-  type InvoiceInfo,
-  type Entitlements,
   type OrgMemberInfo,
   type OrgPolicy,
   type SsoConnectionInfo,
@@ -42,10 +35,7 @@ import {
   Textarea,
   cx,
 } from '@jumper/ui';
-import { UnavailableNotice, isUnavailable } from '../../shared/components/common';
 import { api, errorMessage } from '../../shared/lib/api';
-import { PlanBadge } from '../../shared/components/PlanBadge';
-import { CardBilling } from './CardBilling';
 
 const enc = encodeURIComponent;
 
@@ -70,11 +60,7 @@ export function SectionTitle({
 }
 
 function Failure({ error }: { error: unknown }) {
-  return isUnavailable(error) ? (
-    <UnavailableNotice error={error} />
-  ) : (
-    <Flash tone="danger">{errorMessage(error)}</Flash>
-  );
+  return <Flash tone="danger">{errorMessage(error)}</Flash>;
 }
 
 const lines = (s: string) =>
@@ -423,7 +409,7 @@ export function PolicyPanel({ owner }: { owner: string }) {
   const q = useQuery({
     queryKey: key,
     queryFn: () =>
-      api.get<{ policy: OrgPolicy; entitlements: Entitlements }>(`/owners/${enc(owner)}/policy`),
+      api.get<{ policy: OrgPolicy }>(`/owners/${enc(owner)}/policy`),
   });
   const [p, setP] = useState<OrgPolicy>(DEFAULT_ORG_POLICY);
   const [msg, setMsg] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
@@ -443,8 +429,6 @@ export function PolicyPanel({ owner }: { owner: string }) {
   });
   if (q.isLoading) return <PageSpinner />;
   if (q.error) return <Failure error={q.error} />;
-  const ent = q.data!.entitlements;
-  const has = (f: string) => ent.features.includes(f as never);
   const set = <K extends keyof OrgPolicy>(k: K, v: OrgPolicy[K]) => setP({ ...p, [k]: v });
 
   return (
@@ -453,13 +437,7 @@ export function PolicyPanel({ owner }: { owner: string }) {
         Rules applied to every repository in the organization, on top of each repository's own
         settings. Repository admins cannot loosen them.
       </SectionTitle>
-      {!has('org_policies') && (
-        <UnavailableNotice
-          message={ent.reason ?? 'Organization-wide policies are part of Business.'}
-        />
-      )}
-
-      <fieldset disabled={!has('org_policies')} className="space-y-4">
+      <fieldset className="space-y-4">
         <legend className="mb-2 text-sm font-medium">Branches and sharing</legend>
         <ListField
           label="Protected branches"
@@ -487,13 +465,8 @@ export function PolicyPanel({ owner }: { owner: string }) {
         )}
       </fieldset>
 
-      <fieldset disabled={!has('security_policies')} className="space-y-4">
+      <fieldset className="space-y-4">
         <legend className="mb-2 text-sm font-medium">Security</legend>
-        {!has('security_policies') && (
-          <p className="text-xs text-fg-muted">
-            Required two-factor login, address allowlists and session limits need Business.
-          </p>
-        )}
         <Checkbox
           checked={p.requireTwoFactor}
           onChange={(e) => set('requireTwoFactor', e.target.checked)}
@@ -529,7 +502,6 @@ export function PolicyPanel({ owner }: { owner: string }) {
           variant="primary"
           loading={save.isPending}
           onClick={() => save.mutate()}
-          disabled={!has('org_policies') && !has('security_policies')}
         >
           Save policy
         </Button>
@@ -911,7 +883,7 @@ export function AuditPanel({ owner }: { owner: string }) {
         }
       >
         Who changed what in this organization and its repositories: access, settings, policies,
-        pushes and sign-ins. Export needs Business.
+        pushes and sign-ins.
       </SectionTitle>
       <div className="mb-3 flex flex-wrap gap-2">
         <Input
@@ -980,440 +952,6 @@ export function AuditPanel({ owner }: { owner: string }) {
           </table>
         </div>
       )}
-    </section>
-  );
-}
-
-// ─── Billing ──────────────────────────────────────────────────────────────
-
-export const money = (cents: number | null) =>
-  cents === null
-    ? 'Quoted'
-    : `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-const CYCLE_COPY: Record<BillingCycle, { label: string; per: string; note: string }> = {
-  monthly: { label: 'Monthly', per: 'month', note: 'Invoiced at the start of each month.' },
-  annual: { label: 'Annual', per: 'year', note: 'Invoiced once a year. Two months free.' },
-};
-
-const shortDate = (iso: string | null) =>
-  iso
-    ? new Date(iso).toLocaleDateString(undefined, {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      })
-    : '';
-
-const sameProfile = (a: BillingProfile, b: BillingProfile) =>
-  (Object.keys(a) as (keyof BillingProfile)[]).every((k) => a[k] === b[k]);
-
-const INVOICE_TONE: Record<InvoiceInfo['status'], 'success' | 'attention' | 'default'> = {
-  paid: 'success',
-  open: 'attention',
-  draft: 'default',
-  void: 'default',
-};
-const INVOICE_LABEL: Record<InvoiceInfo['status'], string> = {
-  paid: 'Paid',
-  open: 'Due',
-  draft: 'Draft',
-  void: 'Void',
-};
-
-/** Plan summary, the details printed on invoices, and the invoices issued so far. */
-export function BillingPanel({ owner, isOrg = false }: { owner: string; isOrg?: boolean }) {
-  const qc = useQueryClient();
-  const key = ['billing', owner];
-  const q = useQuery({
-    queryKey: key,
-    queryFn: () => api.get<BillingInfo>(`/owners/${enc(owner)}/billing`),
-  });
-  const [form, setForm] = useState<BillingProfile | null>(null);
-  const [msg, setMsg] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
-  useEffect(() => {
-    if (q.data) setForm(q.data.profile);
-  }, [q.data]);
-  useEffect(() => {
-    if (msg?.tone !== 'success') return;
-    const t = setTimeout(() => setMsg(null), 4000);
-    return () => clearTimeout(t);
-  }, [msg]);
-  const save = useMutation({
-    mutationFn: () => api.put<BillingInfo>(`/owners/${enc(owner)}/billing`, form),
-    onSuccess: (d) => {
-      qc.setQueryData(key, d);
-      setMsg({ tone: 'success', text: 'Billing details saved.' });
-    },
-    onError: (e) => setMsg({ tone: 'danger', text: errorMessage(e) }),
-  });
-  if (q.isLoading || !form) return q.error ? <Failure error={q.error} /> : <PageSpinner />;
-  const b = q.data!;
-  const plan = DEFAULT_PLANS[b.plan];
-  const set = (patch: Partial<BillingProfile>) => {
-    setMsg(null);
-    setForm({ ...form, ...patch });
-  };
-  const dirty = !sameProfile(form, b.profile);
-  const unit = (c: BillingCycle) =>
-    c === 'annual' ? plan.priceAnnualCents : plan.priceMonthlyCents;
-  const paid = (unit('monthly') ?? 1) > 0;
-  const m = unit('monthly'),
-    y = unit('annual');
-  const annualSaving = m && y ? Math.round((1 - y / (m * 12)) * 100) : 0;
-  const emailInvalid = form.email !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email);
-
-  return (
-    <section className="space-y-6">
-      <SectionTitle title="Billing">
-        {b.cardPayments
-          ? 'Pay by card through Stripe, or by invoice for Enterprise. Receipts and invoices for both are listed below.'
-          : 'Plans are paid by invoice. What you enter here is printed on every invoice we send.'}
-      </SectionTitle>
-
-      {/* Plan summary */}
-      <Box className="grid divide-y divide-border-muted sm:grid-cols-[minmax(0,1fr)_auto] sm:divide-x sm:divide-y-0">
-        <div className="flex items-start gap-4 p-5">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-canvas-subtle text-fg-muted">
-            <Receipt size={18} aria-hidden />
-          </div>
-          <div className="min-w-0">
-            <p className="label-mono mb-1">Current plan</p>
-            <p className="flex items-center gap-2 text-lg font-medium tracking-tight">
-              {plan.name}
-              <PlanBadge plan={b.plan} />
-            </p>
-            <p className="mt-0.5 text-[13px] text-fg-muted">
-              {b.seats} {b.seats === 1 ? 'seat' : 'seats'} · billed{' '}
-              {b.cycle === 'annual' ? 'annually' : 'monthly'}
-            </p>
-          </div>
-        </div>
-        <div className="p-5 sm:min-w-[13rem] sm:text-right">
-          <p className="label-mono mb-1">Next invoice</p>
-          {b.nextPeriodCents === null ? (
-            <>
-              <p className="text-lg font-medium">Quoted</p>
-              <p className="mt-0.5 text-[13px] text-fg-muted">Priced individually for you</p>
-            </>
-          ) : b.nextPeriodCents === 0 ? (
-            <>
-              <p className="text-lg font-medium">Nothing due</p>
-              <p className="mt-0.5 text-[13px] text-fg-muted">The {plan.name} plan has no charge</p>
-            </>
-          ) : (
-            <>
-              <p className="text-lg font-medium tabular-nums">{money(b.nextPeriodCents)}</p>
-              <p className="mt-0.5 text-[13px] text-fg-muted">
-                per {CYCLE_COPY[b.cycle].per}, excluding tax
-              </p>
-            </>
-          )}
-        </div>
-      </Box>
-
-      {b.cardPayments && b.plan !== 'enterprise' && <CardBilling owner={owner} billing={b} queryKey={key} isOrg={isOrg} />}
-
-      {/* Billing details */}
-      <form
-        noValidate
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!emailInvalid && dirty) save.mutate();
-        }}
-      >
-        <Box>
-          <BoxHeader className="flex-col items-start gap-0.5">
-            <h3 className="text-sm font-medium">Billing details</h3>
-            <p className="text-[13px] text-fg-muted">
-              Who the invoice is addressed to. All fields are optional.
-            </p>
-          </BoxHeader>
-          <div className="grid gap-x-6 gap-y-5 p-5 xl:grid-cols-[minmax(0,1fr)_15rem]">
-            <div className="space-y-5">
-              {!b.subscription && (
-              <fieldset>
-                <legend className="mb-2 block text-sm font-medium text-fg">Billing cycle</legend>
-                <div role="radiogroup" className="grid gap-2 sm:grid-cols-2">
-                  {(['monthly', 'annual'] as const).map((c) => {
-                    const on = form.cycle === c;
-                    const u = unit(c);
-                    return (
-                      <button
-                        key={c}
-                        type="button"
-                        role="radio"
-                        aria-checked={on}
-                        onClick={() => set({ cycle: c })}
-                        className={cx(
-                          'relative flex flex-col items-start gap-0.5 rounded-md border px-3.5 py-3 text-left transition-[border-color,background-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-emphasis',
-                          on
-                            ? 'border-fg bg-canvas ring-1 ring-fg'
-                            : 'border-border bg-canvas hover:border-fg-subtle',
-                        )}
-                      >
-                        <span className="flex w-full items-center gap-2 text-sm font-medium">
-                          <span
-                            aria-hidden
-                            className={cx(
-                              'flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border',
-                              on ? 'border-fg' : 'border-border',
-                            )}
-                          >
-                            {on && <span className="h-1.5 w-1.5 rounded-full bg-fg" />}
-                          </span>
-                          {CYCLE_COPY[c].label}
-                          {c === 'annual' && annualSaving > 0 && (
-                            <Label tone="success" className="ml-auto">
-                              Save {annualSaving}%
-                            </Label>
-                          )}
-                        </span>
-                        {paid && u !== null && (
-                          <span className="pl-[22px] text-[13px] tabular-nums text-fg">
-                            {money(u)}{' '}
-                            <span className="text-fg-muted">/ seat / {CYCLE_COPY[c].per}</span>
-                          </span>
-                        )}
-                        <span className="pl-[22px] text-xs text-fg-muted">
-                          {CYCLE_COPY[c].note}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </fieldset>
-              )}
-
-              <div className="grid gap-5 sm:grid-cols-2">
-                <FormField
-                  label="Invoice email"
-                  hint="Where invoices are sent."
-                  error={emailInvalid ? 'Enter a valid email address.' : null}
-                >
-                  {(id) => (
-                    <Input
-                      id={id}
-                      type="email"
-                      autoComplete="email"
-                      placeholder="accounts@example.com"
-                      value={form.email}
-                      invalid={emailInvalid}
-                      onChange={(e) => set({ email: e.target.value.trim() })}
-                    />
-                  )}
-                </FormField>
-                <FormField label="Company or full name" hint="Shown as the billed party.">
-                  {(id) => (
-                    <Input
-                      id={id}
-                      autoComplete="organization"
-                      placeholder="Acme Hardware Ltd"
-                      value={form.company}
-                      onChange={(e) => set({ company: e.target.value })}
-                    />
-                  )}
-                </FormField>
-              </div>
-
-              <FormField label="Billing address">
-                {(id) => (
-                  <Textarea
-                    id={id}
-                    rows={3}
-                    autoComplete="street-address"
-                    placeholder={'12 Market Street\nCambridge CB2 3QZ\nUnited Kingdom'}
-                    value={form.address}
-                    onChange={(e) => set({ address: e.target.value })}
-                  />
-                )}
-              </FormField>
-
-              <div className="grid gap-5 sm:grid-cols-2">
-                <FormField label="Tax ID" hint="VAT, GST or similar, if your company has one.">
-                  {(id) => (
-                    <Input
-                      id={id}
-                      placeholder="GB123456789"
-                      value={form.taxId}
-                      onChange={(e) => set({ taxId: e.target.value })}
-                      className="font-mono"
-                    />
-                  )}
-                </FormField>
-                <FormField label="Purchase order number" hint="If your finance team needs one.">
-                  {(id) => (
-                    <Input
-                      id={id}
-                      placeholder="PO-0042"
-                      value={form.poNumber}
-                      onChange={(e) => set({ poNumber: e.target.value })}
-                      className="font-mono"
-                    />
-                  )}
-                </FormField>
-              </div>
-            </div>
-
-            {/* What the "Bill to" block of the next invoice will say. */}
-            <aside aria-label="Invoice preview" className="hidden xl:block">
-              <div className="sticky top-20 rounded-md border border-border bg-canvas-subtle p-4 text-[13px]">
-                <p className="label-mono mb-3">On your invoice</p>
-                <p className="mb-1 text-xs text-fg-subtle">Bill to</p>
-                {form.company || form.address || form.email ? (
-                  <div className="space-y-0.5 break-words">
-                    {form.company && <p className="font-medium">{form.company}</p>}
-                    {form.address && (
-                      <p className="whitespace-pre-line text-fg-muted">{form.address}</p>
-                    )}
-                    {form.email && <p className="text-fg-muted">{form.email}</p>}
-                  </div>
-                ) : (
-                  <p className="text-fg-subtle">Your account name</p>
-                )}
-                {(form.taxId || form.poNumber) && (
-                  <dl className="mt-3 space-y-1 border-t border-border-muted pt-3 text-xs">
-                    {form.taxId && (
-                      <div className="flex justify-between gap-2">
-                        <dt className="text-fg-subtle">Tax ID</dt>
-                        <dd className="truncate font-mono">{form.taxId}</dd>
-                      </div>
-                    )}
-                    {form.poNumber && (
-                      <div className="flex justify-between gap-2">
-                        <dt className="text-fg-subtle">PO</dt>
-                        <dd className="truncate font-mono">{form.poNumber}</dd>
-                      </div>
-                    )}
-                  </dl>
-                )}
-              </div>
-            </aside>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-3 rounded-b-md border-t border-border bg-canvas-subtle px-5 py-3">
-            <span
-              role="status"
-              className={cx(
-                'mr-auto text-[13px]',
-                msg?.tone === 'danger' ? 'text-danger' : msg ? 'text-success' : 'text-fg-muted',
-              )}
-            >
-              {msg ? (
-                <span className="inline-flex items-center gap-1.5">
-                  {msg.tone === 'success' && <Check size={14} aria-hidden />}
-                  {msg.text}
-                </span>
-              ) : dirty ? (
-                'You have unsaved changes.'
-              ) : (
-                ''
-              )}
-            </span>
-            {dirty && (
-              <Button
-                variant="invisible"
-                size="sm"
-                onClick={() => (setMsg(null), setForm(b.profile))}
-              >
-                Discard
-              </Button>
-            )}
-            <Button
-              type="submit"
-              variant="primary"
-              size="sm"
-              loading={save.isPending}
-              disabled={!dirty || emailInvalid}
-            >
-              Save details
-            </Button>
-          </div>
-        </Box>
-      </form>
-
-      {/* Invoices */}
-      <Box>
-        <BoxHeader>
-          <h3 className="text-sm font-medium">Invoices</h3>
-          {b.invoices.length > 0 && (
-            <span className="ml-auto text-xs text-fg-subtle">{b.invoices.length} issued</span>
-          )}
-        </BoxHeader>
-        {b.invoices.length === 0 ? (
-          <div className="flex flex-col items-center px-6 py-10 text-center">
-            <FileText size={20} className="mb-3 text-fg-subtle" aria-hidden />
-            <p className="text-sm font-medium">No invoices yet</p>
-            <p className="mt-1 max-w-sm text-[13px] text-fg-muted">
-              {paid
-                ? 'Invoices appear here as soon as they are issued, with a printable copy of each.'
-                : 'You are on the Free plan, so there is nothing to bill.'}
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-[13px]">
-              <thead>
-                <tr className="border-b border-border-muted text-left text-xs text-fg-subtle">
-                  <th className="px-5 py-2 font-normal">Invoice</th>
-                  <th className="px-3 py-2 font-normal">Period</th>
-                  <th className="px-3 py-2 font-normal">Status</th>
-                  <th className="px-5 py-2 text-right font-normal">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {b.invoices.map((i) => (
-                  <tr
-                    key={i.id}
-                    className="border-b border-border-muted transition-colors last:border-0 hover:bg-canvas-subtle"
-                  >
-                    <td className="px-5 py-3">
-                      {i.source === 'stripe' && i.hostedUrl ? (
-                        <a href={i.hostedUrl} target="_blank" rel="noreferrer" className="link font-mono">
-                          {i.number}
-                        </a>
-                      ) : (
-                        <Link
-                          to="/billing/$owner/invoices/$id"
-                          params={{ owner, id: i.id }}
-                          className="link font-mono"
-                        >
-                          {i.number}
-                        </Link>
-                      )}
-                      {i.source === 'stripe' && <span className="ml-2 text-xs text-fg-subtle">card</span>}
-                      {i.pdfUrl && (
-                        <a href={i.pdfUrl} target="_blank" rel="noreferrer" className="ml-2 text-xs text-fg-muted hover:text-fg">
-                          PDF
-                        </a>
-                      )}
-                      {i.issuedAt && (
-                        <p className="mt-0.5 text-xs text-fg-subtle">
-                          Issued {shortDate(i.issuedAt)}
-                        </p>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-3 text-fg-muted">
-                      {shortDate(i.periodStart)} – {shortDate(i.periodEnd)}
-                    </td>
-                    <td className="px-3 py-3">
-                      <Label tone={INVOICE_TONE[i.status]}>{INVOICE_LABEL[i.status]}</Label>
-                      {i.status === 'open' && i.dueAt && (
-                        <p className="mt-0.5 text-xs text-fg-subtle">by {shortDate(i.dueAt)}</p>
-                      )}
-                      {i.status === 'paid' && i.paidAt && (
-                        <p className="mt-0.5 text-xs text-fg-subtle">{shortDate(i.paidAt)}</p>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-right font-medium tabular-nums">
-                      {money(i.totalCents)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Box>
     </section>
   );
 }

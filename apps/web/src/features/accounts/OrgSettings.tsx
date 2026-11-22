@@ -7,8 +7,7 @@ import { Avatar, Box, BoxHeader, BoxRow, Button, Dialog, Flash, FormField, IconB
 import { ErrorView, PageContainer, PageHeader } from '../../shared/components/common';
 import { api, errorMessage } from '../../shared/lib/api';
 import { useMe } from '../../shared/lib/queries';
-import { UsagePanel } from '../usage/UsagePanel';
-import { AuditPanel, BillingPanel, CustomRolesPanel, MemberRolesPanel, PolicyPanel, SsoPanel } from './Governance';
+import { AuditPanel, CustomRolesPanel, MemberRolesPanel, PolicyPanel, SsoPanel } from './Governance';
 import { InvitePanel } from './Invites';
 
 const ORG_SECTIONS = [
@@ -17,7 +16,6 @@ const ORG_SECTIONS = [
   { id: 'policies', label: 'Policies' },
   { id: 'sso', label: 'Single sign-on' },
   { id: 'audit', label: 'Audit log' },
-  { id: 'billing', label: 'Billing' },
 ] as const;
 type OrgSection = (typeof ORG_SECTIONS)[number]['id'];
 
@@ -172,7 +170,6 @@ export function OrgSettingsPage() {
       {isOwner && section === 'policies' && <PolicyPanel owner={ns.slug} />}
       {isOwner && section === 'sso' && <SsoPanel owner={ns.slug} />}
       {isOwner && section === 'audit' && <AuditPanel owner={ns.slug} />}
-      {isOwner && section === 'billing' && <BillingPanel owner={ns.slug} isOrg />}
 
       {section === 'general' && <>
       {isOwner && (
@@ -195,12 +192,6 @@ export function OrgSettingsPage() {
           </form>
         </section>
       )}
-
-      <section className="mb-10">
-        <h2 className="mb-1 text-[15px] font-medium">Usage and plan</h2>
-        <p className="mb-4 text-sm text-fg-muted">Storage, check minutes and seats used by {ns.slug}'s repositories.</p>
-        <UsagePanel owner={ns.slug} />
-      </section>
 
       {isOwner && (
         <section>

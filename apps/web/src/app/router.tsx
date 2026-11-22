@@ -33,13 +33,9 @@ const RepoSettingsPage = lazyRouteComponent(() => import('../features/repo/RepoS
 const SearchPage = lazyRouteComponent(() => import('../features/search/Search'), 'SearchPage');
 const RepoSearchPage = lazyRouteComponent(() => import('../features/search/Search'), 'RepoSearchPage');
 const NotificationsPage = lazyRouteComponent(() => import('../features/notifications/Notifications'), 'NotificationsPage');
-const PricingPage = lazyRouteComponent(() => import('../features/pricing/Pricing'), 'PricingPage');
-const CheckoutPage = lazyRouteComponent(() => import('../features/pricing/Checkout'), 'CheckoutPage');
-const CheckoutDonePage = lazyRouteComponent(() => import('../features/pricing/Checkout'), 'CheckoutDonePage');
 const SharePage = lazyRouteComponent(() => import('../features/share/SharePage'), 'SharePage');
 const TermsPage = lazyRouteComponent(() => import('../features/legal/Legal'), 'TermsPage');
 const PrivacyPage = lazyRouteComponent(() => import('../features/legal/Legal'), 'PrivacyPage');
-const RefundsPage = lazyRouteComponent(() => import('../features/legal/Legal'), 'RefundsPage');
 
 type BlobTab = 'view' | 'compare' | 'render' | '3d' | 'bom' | 'fab' | 'firmware' | 'source';
 
@@ -76,7 +72,6 @@ const newRepoRoute = createRoute({
 });
 const orgSettingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/organizations/$org/settings', component: OrgSettingsPage });
 const orgSettingsSectionRoute = createRoute({ getParentRoute: () => rootRoute, path: '/organizations/$org/settings/$section', component: OrgSettingsPage });
-const invoiceRoute = createRoute({ getParentRoute: () => rootRoute, path: '/billing/$owner/invoices/$id', component: lazyRouteComponent(() => import('../features/accounts/Invoice'), 'InvoicePage') });
 const newOrgRoute = createRoute({ getParentRoute: () => rootRoute, path: '/organizations/new', component: NewOrgPage });
 const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: SettingsPage });
 const settingsSectionRoute = createRoute({ getParentRoute: () => rootRoute, path: '/settings/$section', component: SettingsPage });
@@ -85,30 +80,13 @@ const docRoute = createRoute({ getParentRoute: () => rootRoute, path: '/docs/$sl
 const adminRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin', component: AdminOverviewPage });
 const adminUsersRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin/users', component: AdminUsersPage });
 const adminInstanceRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin/instance', component: lazyRouteComponent(() => import('../features/admin/Admin'), 'AdminInstancePage') });
-const adminCustomersRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin/customers', component: lazyRouteComponent(() => import('../features/admin/Customers'), 'AdminCustomersPage') });
-const adminCustomerRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin/customers/$owner', component: lazyRouteComponent(() => import('../features/admin/Customers'), 'AdminCustomerPage') });
-const adminInvoicesRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin/invoices', component: lazyRouteComponent(() => import('../features/admin/Admin'), 'AdminInvoicesPage') });
 type DbSearch = { page?: number; q?: string; sort?: string; dir?: 'asc' | 'desc' };
 const dbSearch = (s: Record<string, unknown>): DbSearch => ({ page: num(s.page), q: str(s.q), sort: str(s.sort), dir: s.dir === 'asc' ? 'asc' : s.dir === 'desc' ? 'desc' : undefined });
 const adminDbRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin/database', validateSearch: dbSearch, component: AdminDatabasePage });
 const adminTableRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin/database/$table', validateSearch: dbSearch, component: AdminDatabasePage });
 const notificationsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/notifications', component: NotificationsPage });
-const pricingRoute = createRoute({ getParentRoute: () => rootRoute, path: '/pricing', validateSearch: (s: Record<string, unknown>): { for?: 'personal' | 'organization' } => ({ for: s.for === 'organization' ? 'organization' : s.for === 'personal' ? 'personal' : undefined }), component: PricingPage });
-const checkoutRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/checkout',
-  validateSearch: (s: Record<string, unknown>): { plan?: string; cycle?: string; owner?: string } => ({ plan: str(s.plan), cycle: str(s.cycle), owner: str(s.owner) }),
-  component: CheckoutPage,
-});
-const checkoutDoneRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/checkout/done',
-  validateSearch: (s: Record<string, unknown>): { owner?: string; plan?: string } => ({ owner: str(s.owner), plan: str(s.plan) }),
-  component: CheckoutDonePage,
-});
 const termsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/terms', component: TermsPage });
 const privacyRoute = createRoute({ getParentRoute: () => rootRoute, path: '/privacy', component: PrivacyPage });
-const refundsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/refunds', component: RefundsPage });
 const embedRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/embed/$owner/$repo',
@@ -169,12 +147,8 @@ const repoSearchRoute = createRoute({ getParentRoute: () => repoRoute, path: '/s
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
-  pricingRoute,
-  checkoutRoute,
-  checkoutDoneRoute,
   termsRoute,
   privacyRoute,
-  refundsRoute,
   loginRoute,
   signupRoute,
   inviteRoute,
@@ -186,21 +160,16 @@ const routeTree = rootRoute.addChildren([
   newOrgRoute,
   orgSettingsRoute,
   orgSettingsSectionRoute,
-  invoiceRoute,
   settingsRoute,
   settingsSectionRoute,
   docsRoute,
   docRoute,
   notificationsRoute,
-
   shareRoute,
   embedRoute,
   adminRoute,
   adminUsersRoute,
   adminInstanceRoute,
-  adminInvoicesRoute,
-  adminCustomersRoute,
-  adminCustomerRoute,
   adminDbRoute,
   adminTableRoute,
   ownerRoute,
@@ -224,7 +193,7 @@ const routeTree = rootRoute.addChildren([
 
 /** Page chunks in the order people usually reach them; fetched one by one once the first page has settled. */
 const WARM = [
-  HomePage, PricingPage, LoginPage, SignupPage, DocsPage, SearchPage, RepoLayout, CodePage, BlobPage, OwnerPage,
+  HomePage, LoginPage, SignupPage, DocsPage, SearchPage, RepoLayout, CodePage, BlobPage, OwnerPage,
   ChecksPage, OutputsPage, PartsPage, CommitsPage, CommitPage, BranchesPage, ComparePage, SettingsPage, RepoSettingsPage,
   NewRepoPage, NotificationsPage, NewOrgPage, OrgSettingsPage, TermsPage, AdminOverviewPage,
 ];

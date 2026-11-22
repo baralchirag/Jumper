@@ -4,7 +4,7 @@ These terms are an agreement between you and {{operator}} ("we"), who runs the J
 
 ## 1. The service
 
-Jumper hosts git repositories for electronics projects and runs automated work on them: ERC and DRC checks, renders, 3D exports, BOM pricing and manufacturing packages. Features can change over time. We will tell you in advance before removing something you rely on in a paid plan.
+Jumper hosts git repositories for electronics projects and runs automated work on them: ERC and DRC checks, renders, 3D exports, BOM pricing and manufacturing packages. Features can change over time. We will try to tell you in advance before removing something you rely on.
 
 ## 2. Your account
 
@@ -31,16 +31,14 @@ Do not use Jumper to:
 - upload malware, or designs whose main purpose is to cause harm (weapons, devices built to defeat safety systems or to intercept other people's communications);
 - harass people, or post content that sexualizes minors;
 - overload or probe the service, get around limits or access controls, or reach other users' data;
-- resell the service, or run it mainly as file storage or a CDN unrelated to hardware projects;
+- run it mainly as file storage or a CDN unrelated to hardware projects;
 - send spam through notifications, webhooks or invitations.
 
 We may remove content or suspend accounts that break these rules. When it is reasonable to, we will warn you first and tell you why.
 
-## 5. Plans, limits and payment
+## 5. Cost
 
-Free and paid plans come with limits on storage, check minutes and seats. The current limits for your account are shown under **Settings → Usage**. Going over a limit can pause checks or block pushes until you reduce usage or change plan; it never deletes your data.
-
-Paid plans renew automatically until cancelled. Prices exclude taxes unless stated. Refunds follow the [refund policy](/refunds).
+Jumper is free to use. The operator may set limits on storage or sign-ups to keep the service running. Reaching a limit never deletes your data.
 
 ## 6. Third-party services
 
@@ -56,11 +54,11 @@ We aim to keep Jumper available and to back data up, but we do not promise unint
 
 ## 9. Ending the agreement
 
-You can delete your account at any time under **Settings → Account**, and download your data first. We may end the agreement if you seriously or repeatedly break these terms, or with 30 days' notice for any other reason. Paid time you have not used is refunded in that case.
+You can delete your account at any time under **Settings → Account**, and download your data first. We may end the agreement if you seriously or repeatedly break these terms, or with 30 days' notice for any other reason.
 
 ## 10. Liability
 
-The service is provided "as is". To the extent the law allows, we are not liable for indirect or consequential losses, including lost profits, a failed production run, or damaged components. Our total liability to you in any 12 months is limited to the greater of the amount you paid us in that period and 100 USD. Nothing here limits liability that cannot be limited by law, such as for fraud or death and personal injury caused by negligence.
+The service is provided "as is". To the extent the law allows, we are not liable for indirect or consequential losses, including lost profits, a failed production run, or damaged components. Our total liability to you is limited to 100 USD. Nothing here limits liability that cannot be limited by law, such as for fraud or death and personal injury caused by negligence.
 
 ## 11. Changes
 

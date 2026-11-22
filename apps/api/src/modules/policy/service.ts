@@ -3,7 +3,6 @@ import { and, eq, orgPolicies, ssoConnections, type Namespace, type User } from 
 import { DEFAULT_ORG_POLICY, orgPolicySchema, type AccessDenial, type OrgPolicy } from '@jumper/shared';
 import type { Ctx } from '../../context';
 import { currentRequest, perRequest } from '../../lib/request-context';
-import { hasFeature } from '../license/license';
 import { ipAllowed } from './cidr';
 
 export async function getOrgPolicy(ctx: Ctx, namespaceId: string): Promise<OrgPolicy> {
@@ -15,9 +14,8 @@ export async function getOrgPolicy(ctx: Ctx, namespaceId: string): Promise<OrgPo
   });
 }
 
-/** The policy when the owner is entitled to organization policies, otherwise the defaults (nothing enforced). */
+/** The policy that applies to an owner. */
 export async function effectivePolicy(ctx: Ctx, ns: Namespace): Promise<OrgPolicy> {
-  if (!(await perRequest(`ent:org_policies:${ns.id}`, () => hasFeature(ctx, ns, 'org_policies')))) return DEFAULT_ORG_POLICY;
   return getOrgPolicy(ctx, ns.id);
 }
 
@@ -42,7 +40,6 @@ async function enforcedSso(ctx: Ctx, namespaceId: string): Promise<string[]> {
  */
 export async function accessDenial(ctx: Ctx, user: User, ns: Namespace): Promise<AccessDenial | null> {
   if (ns.kind !== 'org' || user.isAdmin) return null;
-  if (!(await perRequest(`ent:security_policies:${ns.id}`, () => hasFeature(ctx, ns, 'security_policies')))) return null;
   const policy = await getOrgPolicy(ctx, ns.id);
   if (policy.requireTwoFactor && !user.totpEnabledAt) return 'two_factor';
   const req = currentRequest();
@@ -51,7 +48,7 @@ export async function accessDenial(ctx: Ctx, user: User, ns: Namespace): Promise
   if (req.method === 'session') {
     if (policy.sessionMaxHours && req.sessionCreatedAt && Date.now() - req.sessionCreatedAt.getTime() > policy.sessionMaxHours * 3600_000) return 'session_age';
     const required = await enforcedSso(ctx, ns.id);
-    if (required.length && !(req.ssoConnectionId && required.includes(req.ssoConnectionId)) && (await perRequest(`ent:sso:${ns.id}`, () => hasFeature(ctx, ns, 'sso')))) return 'sso';
+    if (required.length && !(req.ssoConnectionId && required.includes(req.ssoConnectionId))) return 'sso';
   }
   return null;
 }

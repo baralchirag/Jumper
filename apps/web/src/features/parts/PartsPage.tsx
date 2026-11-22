@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Download, PackageX, RefreshCw } from 'lucide-react';
 import type { BomAlertInfo, BomAlertKind, BomWatchInfo, ComplianceReport, ComplianceStatus } from '@jumper/shared';
 import { Box, BoxHeader, BoxRow, Button, Checkbox, EmptyState, Flash, Input, Label, PageSpinner, RelativeTime, type LabelTone } from '@jumper/ui';
-import { PageContainer, UnavailableNotice, isUnavailable, shortSha } from '../../shared/components/common';
+import { PageContainer, shortSha } from '../../shared/components/common';
 import { api, errorMessage, repoPath } from '../../shared/lib/api';
 import { keys } from '../../shared/lib/queries';
 import { canWrite, useRepoInfo } from '../repo/context';
@@ -221,7 +221,7 @@ function ComplianceSection() {
           </a>
         )}
       </div>
-      {q.error && (isUnavailable(q.error) ? <UnavailableNotice error={q.error} /> : <Flash tone="danger">{errorMessage(q.error)}</Flash>)}
+      {q.error && <Flash tone="danger">{errorMessage(q.error)}</Flash>}
       {q.data && <ComplianceTable r={q.data} />}
     </section>
   );

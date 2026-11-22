@@ -2,7 +2,6 @@ import { and, customRoles, eq, type Namespace } from '@jumper/db';
 import { REPO_ROLES, type RepoRole } from '@jumper/shared';
 import type { Ctx } from '../../context';
 import { badRequest } from '../../lib/errors';
-import { requireFeature } from '../license/license';
 
 /**
  * Turn `read` / `review` / `write` / `admin` or `custom:<id>` into the columns stored on a membership. A custom role
@@ -13,6 +12,5 @@ export async function resolveRoleRef(ctx: Ctx, ns: Namespace, ref: string): Prom
   const id = ref.replace(/^custom:/, '');
   const role = (await ctx.db.select().from(customRoles).where(and(eq(customRoles.id, id), eq(customRoles.namespaceId, ns.id))).limit(1))[0];
   if (!role) throw badRequest('That custom role does not exist for this owner');
-  await requireFeature(ctx, ns, 'custom_roles');
   return { role: role.base, customRoleId: role.id };
 }

@@ -5,7 +5,6 @@ import { badRequest, notFound, unprocessable } from '../../lib/errors';
 import { priceBom } from '../bom/pricing';
 import { collectSheets } from '../code/semantic';
 import { isValidRev } from '../git/repo';
-import { requireFeature } from '../license/license';
 import { loadRepo } from '../repos/access';
 import { buildComplianceReport, complianceCsv } from './service';
 
@@ -32,7 +31,6 @@ const complianceRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (req, reply): Promise<ComplianceReport | void> => {
       const r = await loadRepo(req, req.params.owner, req.params.repo);
-      await requireFeature(ctx, r.ns, 'compliance');
       const sha = await r.git.resolveCommit(req.query.sha || r.repo.defaultBranch);
       if (!sha) throw notFound('Unknown revision');
       let path = req.query.path;

@@ -11,7 +11,6 @@ import { findRepo, permissionFor, repoDiskPath } from '../repos/access';
 import { diffRefs, handleRefUpdates } from '../repos/push';
 import { UNVERIFIED_MESSAGE, mustVerify } from '../auth/verify';
 import { ensureHooks, hookRules, hooksDir, rulesFor } from '../protection/service';
-import { pushRefusal } from '../usage/service';
 import { GitRepo } from './repo';
 
 const SERVICES = new Set(['git-upload-pack', 'git-receive-pack']);
@@ -120,8 +119,6 @@ export async function gitHttpRoutes(app: FastifyInstance) {
       env.GIT_CONFIG_KEY_0 = 'core.hooksPath';
       env.GIT_CONFIG_VALUE_0 = hooksDir(app.ctx.env.reposDir);
       env.JUMPER_PROTECT = hookRules(await rulesFor(app.ctx, repo.id), permission === 'admin');
-      const refusal = await pushRefusal(app.ctx, repo.namespaceId);
-      if (refusal) env.JUMPER_REFUSE = refusal;
     }
     if (req.headers['content-encoding']) env.HTTP_CONTENT_ENCODING = String(req.headers['content-encoding']);
     if (req.headers['git-protocol']) env.GIT_PROTOCOL = String(req.headers['git-protocol']);

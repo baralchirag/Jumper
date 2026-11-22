@@ -5,7 +5,7 @@ const O = 'https://jumper.test';
 
 describe('safeRedirect', () => {
   it('keeps same-site paths with their query', () => {
-    expect(safeRedirect('/checkout?plan=pro&cycle=annual', O)).toBe('/checkout?plan=pro&cycle=annual');
+    expect(safeRedirect('/search?q=usb&page=2', O)).toBe('/search?q=usb&page=2');
     expect(safeRedirect('/acme/board#x', O)).toBe('/acme/board#x');
   });
   it.each([

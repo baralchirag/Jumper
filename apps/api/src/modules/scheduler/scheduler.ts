@@ -4,7 +4,6 @@ import type { Ctx } from '../../context';
 import { housekeeping } from './housekeeping';
 import { syncDueMirrors } from '../mirrors/service';
 import { checkDueStock } from '../alerts/service';
-import { syncAllSeats } from '../stripe/service';
 
 export const QUEUE_SCHEDULED = 'jumper-scheduled';
 
@@ -22,7 +21,6 @@ export const TASKS: Record<string, ScheduledTask> = {
   // Each watched repository is priced at most once a day; a few per run keeps supplier API use smooth.
   stock: { every: 15 * 60_000, run: (ctx) => checkDueStock(ctx) },
   // Backstop for card subscriptions: bill the seats actually in use.
-  'stripe-seats': { every: 3600_000, run: (ctx) => syncAllSeats(ctx) },
   // Digests go out a week after each person's previous one; hourly runs pick up whoever is due.
 };
 

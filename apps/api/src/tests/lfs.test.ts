@@ -10,8 +10,7 @@ describe.skipIf(!dbAvailable)('git LFS', () => {
   let alice: Client, bob: Client;
   let aliceAuth: string, bobAuth: string;
   beforeAll(async () => {
-    // Free plan with 1 MB of storage, enforced, to exercise the limit.
-    h = await createHarness({ env: { PLANS_ENFORCED: 'true', PLAN_LIMITS: '{"free":{"storageMb":1}}', LFS_MAX_OBJECT_MB: '2' } });
+    h = await createHarness({ env: { LFS_MAX_OBJECT_MB: '2' } });
   });
   afterAll(() => h.close());
   beforeEach(async () => {
@@ -53,13 +52,9 @@ describe.skipIf(!dbAvailable)('git LFS', () => {
     const get = await h.app.inject({ method: 'GET', url: `/alice/board.git/info/lfs/objects/${oid}`, headers: { authorization: aliceAuth } });
     expect(get.statusCode).toBe(200);
     expect(get.rawPayload.equals(data)).toBe(true);
-
-    // Large files count towards usage.
-    const usage = await alice.get('/api/usage/alice');
-    expect(usage.json.usage.storage.largeFiles).toBe(data.length);
   });
 
-  it('rejects content that does not match its id, oversized files and plan overruns', async () => {
+  it('rejects content that does not match its id, and oversized files', async () => {
     await h.repo(alice, 'board');
     const oid = oidOf(Buffer.from('real'));
     const bad = await h.app.inject({ method: 'PUT', url: `/alice/board.git/info/lfs/objects/${oid}`, headers: { 'content-type': 'application/octet-stream', authorization: aliceAuth }, payload: Buffer.from('fake') });
@@ -69,9 +64,6 @@ describe.skipIf(!dbAvailable)('git LFS', () => {
 
     const huge = await batch('/alice/board.git', { operation: 'upload', objects: [{ oid: 'b'.repeat(64), size: 3 * 1024 * 1024 }] }, aliceAuth);
     expect(huge.json().objects[0].error.code).toBe(422);
-    const over = await batch('/alice/board.git', { operation: 'upload', objects: [{ oid: 'c'.repeat(64), size: 1024 * 1024 + 1 }, { oid: 'd'.repeat(64), size: 10 }] }, aliceAuth);
-    expect(over.statusCode).toBe(507);
-    expect(over.json().message).toContain('storage');
   });
 
   it('applies repository permissions', async () => {

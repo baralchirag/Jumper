@@ -126,17 +126,3 @@ export function PageHeader({ title, children, action }: { title: ReactNode; chil
   );
 }
 
-/** True when the API refused because the owner's plan or the instance's licence does not include a feature. */
-export function isUnavailable(e: unknown): boolean {
-  return e instanceof ApiError && e.status === 402;
-}
-
-/** Calm notice in place of a feature the plan or licence does not include, instead of an error. */
-export function UnavailableNotice({ error, what, message }: { error?: unknown; what?: string; message?: string }) {
-  return (
-    <div className="rounded-md border border-dashed border-border px-4 py-5 text-[13px] text-fg-muted">
-      <p className="label-mono mb-1.5">{(error instanceof ApiError && (error.details as { needs?: string } | undefined)?.needs) === 'enterprise' ? 'Enterprise' : 'Business'}</p>
-      <p>{what ? `${what}: ` : ''}{message ?? errorMessage(error)}</p>
-    </div>
-  );
-}

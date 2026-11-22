@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useParams, useRouterState } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { BookOpen, Bell, Building2, Database, KeyRound, LogOut, Menu, Monitor, Moon, Plus, Search, Settings, Shield, Sun, Tag, User } from 'lucide-react';
+import { BookOpen, Bell, Building2, Database, KeyRound, LogOut, Menu, Monitor, Moon, Plus, Search, Settings, Shield, Sun, User } from 'lucide-react';
 import { Avatar, Dropdown, MenuHeader, MenuItem, cx } from '@jumper/ui';
 import { NotificationBell } from '../features/notifications/Notifications';
 import { api } from '../shared/lib/api';
 import { keys, useMe, useProviders } from '../shared/lib/queries';
 import { useThemePref, type ThemePref } from '../shared/lib/theme';
-import { PlanBadge, isPaidPlan } from '../shared/components/PlanBadge';
 
 /** Jumper "j": a wire stem whose dot has jumped off along a dashed arc, like a jumper wire leaving its pad. */
 function JumperJ() {
@@ -196,8 +195,6 @@ function FullShell() {
   };
 
   const nav = [
-    // Paying accounts have already chosen: the pricing page is for people still deciding.
-    ...(isPaidPlan(me?.plan) ? [] : [{ to: '/pricing', label: 'Pricing', icon: <Tag size={14} /> }]),
     { to: '/docs', label: 'Docs', icon: <BookOpen size={14} /> },
     ...(me?.isAdmin ? [{ to: '/admin', label: 'Admin', icon: <Shield size={14} /> }] : []),
   ];
@@ -282,7 +279,6 @@ function FullShell() {
                       <div className="border-b border-border-muted px-3 py-2.5">
                         <div className="flex items-center gap-1.5">
                           <span className="truncate text-[13px] font-medium">{me.name || me.username}</span>
-                          <PlanBadge plan={me.plan} />
                         </div>
                         <div className="truncate font-mono text-xs text-fg-subtle">@{me.username}</div>
                       </div>
@@ -343,7 +339,7 @@ function FullShell() {
       <main id="main" ref={mainRef} tabIndex={-1} className="flex-1 focus:outline-none">
         <Outlet />
       </main>
-      <SiteFooter signedIn={Boolean(me)} paid={isPaidPlan(me?.plan)} />
+      <SiteFooter signedIn={Boolean(me)} />
     </div>
   );
 }
@@ -371,7 +367,7 @@ function FooterCol({ title, links }: { title: string; links: { label: string; to
   );
 }
 
-function SiteFooter({ signedIn, paid }: { signedIn: boolean; paid: boolean }) {
+function SiteFooter({ signedIn }: { signedIn: boolean }) {
   return (
     <footer className="border-t border-border bg-page">
       <div className="mx-auto max-w-[1280px] px-5 pb-8 pt-12 md:px-8">
@@ -385,7 +381,6 @@ function SiteFooter({ signedIn, paid }: { signedIn: boolean; paid: boolean }) {
           <FooterCol
             title="Product"
             links={[
-              ...(paid ? [] : [{ label: 'Pricing', to: '/pricing' }]),
               { label: 'New repository', to: '/new' },
               { label: 'KiCad plugin', to: '/docs/kicad-plugin' },
             ]}
@@ -421,9 +416,6 @@ function SiteFooter({ signedIn, paid }: { signedIn: boolean; paid: boolean }) {
             </Link>
             <Link to="/privacy" className="no-underline hover:text-fg">
               Privacy
-            </Link>
-            <Link to="/refunds" className="no-underline hover:text-fg">
-              Refunds
             </Link>
             <span className="font-mono">KiCad 8 · 9</span>
           </span>

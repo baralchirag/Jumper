@@ -1,5 +1,5 @@
-// Stage 3-4 features reachable over HTTP: org policy and roles, audit export, billing, SSO
-// connections, instance administration, SCIM and BOM watches.
+// Features reachable over HTTP: org policy and roles, audit export, SSO connections, instance administration,
+// SCIM and BOM watches.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { sql } from '@jumper/db';
 import { createHarness, dbAvailable, type Harness } from '../testing/harness';
@@ -49,22 +49,12 @@ describe.skipIf(!dbAvailable)('business features over HTTP', () => {
     expect(csv.body).toContain('org.member.role');
   });
 
-  it('keeps billing details and lets administrators raise invoices', async () => {
-    const alice = await h.user('alice');
-    const root = await h.user('root');
-    await h.ctx.db.execute(sql`update users set is_admin = true where username = 'root'`);
-    const b = await alice.get('/api/owners/alice/billing');
-    expect(b.status, b.body).toBe(200);
-    expect((await alice.get('/api/admin/invoices')).status).toBe(403);
-    expect((await root.get('/api/admin/invoices')).status).toBe(200);
-  });
-
   it('serves instance administration to administrators only', async () => {
     const alice = await h.user('alice');
     const root = await h.user('root');
     await h.ctx.db.execute(sql`update users set is_admin = true where username = 'root'`);
-    expect((await alice.get('/api/admin/instance/license')).status).toBe(403);
-    for (const path of ['entitlements', 'license', 'retention', 'legal-holds', 'scim/tokens', 'version']) {
+    expect((await alice.get('/api/admin/instance/retention')).status).toBe(403);
+    for (const path of ['retention', 'legal-holds', 'scim/tokens', 'version']) {
       const r = await root.get(`/api/admin/instance/${path}`);
       expect(r.status, `${path}: ${r.body}`).toBe(200);
     }

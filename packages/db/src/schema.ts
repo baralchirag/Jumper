@@ -12,7 +12,6 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
-  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import type { CheckDetails, CommentAnchor } from '@jumper/shared';
 
@@ -66,8 +65,6 @@ export const users = pgTable(
     externalId: text('external_id'),
     /** Created or managed through SCIM: the directory decides whether the account is active. */
     scimManaged: boolean('scim_managed').notNull().default(false),
-    /** Who invited this person with their referral link, if anyone. */
-    referredBy: uuid('referred_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -162,22 +159,6 @@ export const namespaces = pgTable(
     kind: namespaceKind('kind').notNull(),
     userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
     orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }),
-    /** Plan id from @jumper/shared PLAN_IDS; assigned by an administrator. */
-    plan: text('plan').notNull().default('free'),
-    /** Billing cycle and invoice details (BillingProfile from @jumper/shared). */
-    billing: jsonb('billing').$type<Record<string, string>>().notNull().default({}),
-    /** Stripe customer for card payments (created on first checkout). */
-    stripeCustomerId: text('stripe_customer_id'),
-    /** The Stripe subscription that sets `plan` while it is active; null when the plan is assigned by hand. */
-    stripeSubscriptionId: text('stripe_subscription_id'),
-    /** Stripe subscription status: active, trialing, past_due, unpaid, canceled, incomplete, … */
-    subscriptionStatus: text('subscription_status'),
-    /** When the current card subscription started (Stripe's start_date). */
-    subscriptionStartedAt: timestamp('subscription_started_at', { withTimezone: true }),
-    /** End of the period already paid for. */
-    subscriptionPeriodEnd: timestamp('subscription_period_end', { withTimezone: true }),
-    /** The subscription ends at `subscriptionPeriodEnd` instead of renewing. */
-    subscriptionCancelAtPeriodEnd: boolean('subscription_cancel_at_period_end').notNull().default(false),
     /** Repositories shown first on the profile, in order (a portfolio). */
     pinnedRepoIds: uuid('pinned_repo_ids').array().notNull().default(sql`'{}'::uuid[]`),
     createdAt: createdAt(),
@@ -186,7 +167,6 @@ export const namespaces = pgTable(
     uniqueIndex('namespaces_slug_lower_idx').on(sql`lower(${t.slug})`),
     uniqueIndex('namespaces_user_idx').on(t.userId),
     uniqueIndex('namespaces_org_idx').on(t.orgId),
-    uniqueIndex('namespaces_stripe_customer_idx').on(t.stripeCustomerId),
   ],
 );
 

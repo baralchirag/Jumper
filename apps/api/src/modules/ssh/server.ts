@@ -1,6 +1,6 @@
 // Built-in SSH server for git: `git clone ssh://git@host:2222/owner/repo.git`, push and pull with an SSH key added in
 // account settings. Only the git services run here (no shell, no forwarding). Permissions, email verification, branch
-// protection, plan limits and post-push processing are exactly those of HTTPS pushes.
+// protection and post-push processing are exactly those of HTTPS pushes.
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -15,7 +15,6 @@ import { GitRepo } from '../git/repo';
 import { hookRules, hooksDir, rulesFor, ensureHooks } from '../protection/service';
 import { findRepo, permissionFor, repoDiskPath } from '../repos/access';
 import { diffRefs, handleRefUpdates } from '../repos/push';
-import { pushRefusal } from '../usage/service';
 import { parseGitCommand } from './keys';
 import { sshLfsHeader } from '../lfs/routes';
 
@@ -101,8 +100,6 @@ async function runGitService(ctx: Ctx, log: FastifyBaseLogger, user: User, comma
     env.GIT_CONFIG_KEY_0 = 'core.hooksPath';
     env.GIT_CONFIG_VALUE_0 = hooksDir(ctx.env.reposDir);
     env.JUMPER_PROTECT = hookRules(await rulesFor(ctx, repo.id), permission === 'admin');
-    const refusal = await pushRefusal(ctx, repo.namespaceId);
-    if (refusal) env.JUMPER_REFUSE = refusal;
   }
 
   const child = spawn('git', [parsed.service.slice('git-'.length), diskPath], { env, stdio: ['pipe', 'pipe', 'pipe'] });

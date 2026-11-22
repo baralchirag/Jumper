@@ -518,47 +518,6 @@ export const ssoIdentities = pgTable(
   (t) => [primaryKey({ columns: [t.connection, t.subject] }), index('sso_identities_user_idx').on(t.userId)],
 );
 
-// ---------- invoices ----------
-
-export const invoices = pgTable(
-  'invoices',
-  {
-    id: id(),
-    namespaceId: uuid('namespace_id').notNull().references(() => namespaces.id, { onDelete: 'cascade' }),
-    /** e.g. INV-2026-0042; unique across the instance. */
-    number: text('number').notNull(),
-    status: text('status').$type<'draft' | 'open' | 'paid' | 'void'>().notNull().default('open'),
-    lines: jsonb('lines').$type<{ description: string; quantity: number; unitCents: number }[]>().notNull(),
-    subtotalCents: integer('subtotal_cents').notNull(),
-    taxPercent: integer('tax_basis_points').notNull().default(0),
-    taxCents: integer('tax_cents').notNull().default(0),
-    totalCents: integer('total_cents').notNull(),
-    periodStart: timestamp('period_start', { withTimezone: true }).notNull(),
-    periodEnd: timestamp('period_end', { withTimezone: true }).notNull(),
-    issuedAt: timestamp('issued_at', { withTimezone: true }),
-    dueAt: timestamp('due_at', { withTimezone: true }),
-    paidAt: timestamp('paid_at', { withTimezone: true }),
-    notes: text('notes').notNull().default(''),
-    /** Billing details copied at issue time, so later edits do not change old invoices. */
-    billTo: jsonb('bill_to').$type<Record<string, string>>().notNull().default({}),
-    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
-    /** Set for invoices raised by Stripe for a card subscription (mirrored from webhooks). */
-    stripeInvoiceId: text('stripe_invoice_id'),
-    /** Stripe's hosted page for paying or viewing the invoice, and its PDF. */
-    hostedUrl: text('hosted_url'),
-    pdfUrl: text('pdf_url'),
-    createdAt: createdAt(),
-  },
-  (t) => [uniqueIndex('invoices_number_idx').on(t.number), index('invoices_ns_idx').on(t.namespaceId, t.createdAt), uniqueIndex('invoices_stripe_idx').on(t.stripeInvoiceId)],
-);
-
-/** Stripe webhook events already applied, so a redelivered event is not applied twice. */
-export const stripeEvents = pgTable('stripe_events', {
-  id: text('id').primaryKey(),
-  type: text('type').notNull(),
-  createdAt: createdAt(),
-});
-
 // ---------- stock and end-of-life alerts ----------
 
 export const bomWatches = pgTable('bom_watches', {
@@ -634,7 +593,6 @@ export const scimTokens = pgTable(
 
 export type CustomRole = typeof customRoles.$inferSelect;
 export type SsoConnection = typeof ssoConnections.$inferSelect;
-export type Invoice = typeof invoices.$inferSelect;
 export type BomAlert = typeof bomAlerts.$inferSelect;
 export type LegalHold = typeof legalHolds.$inferSelect;
 export type LfsObject = typeof lfsObjects.$inferSelect;

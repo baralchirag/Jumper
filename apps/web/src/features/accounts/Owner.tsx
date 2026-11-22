@@ -11,7 +11,6 @@ import { RepoList } from '../../shared/components/RepoList';
 import { ErrorView, PageContainer, UserLink } from '../../shared/components/common';
 import { api } from '../../shared/lib/api';
 import { useMe } from '../../shared/lib/queries';
-import { PlanBadge } from '../../shared/components/PlanBadge';
 
 export function OwnerPage() {
   const { owner } = useParams({ strict: false }) as { owner: string };
@@ -40,7 +39,6 @@ export function OwnerPage() {
             )}
             <h1 className="display flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--t-xl)]">
               <span>{ns.name || ns.slug}</span>
-              <PlanBadge plan={ns.plan} className="px-2 text-[12px] leading-[20px]" />
             </h1>
             {ns.bio && <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-fg-muted">{ns.bio}</p>}
           </div>

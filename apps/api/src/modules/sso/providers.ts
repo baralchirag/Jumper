@@ -2,7 +2,6 @@ import { eq, isNull, namespaces, ssoConnections, type SsoConnection } from '@jum
 import type { SsoConnectionInfo, SsoProvider } from '@jumper/shared';
 import type { Ctx } from '../../context';
 import { decryptSecret } from '../../lib/secrets';
-import { hasFeature } from '../license/license';
 import type { OidcConfig } from './oidc';
 import { samlUrls } from './saml';
 
@@ -37,7 +36,6 @@ export const callbackUrl = (ctx: Ctx, id: string) => `${ctx.env.PUBLIC_URL.repla
 
 /** Buttons for the sign-in page: Google / Microsoft when configured, and instance-wide connections. */
 export async function publicProviders(ctx: Ctx): Promise<SsoProvider[]> {
-  if (!(await hasFeature(ctx, null, 'sso'))) return [];
   const out: SsoProvider[] = [];
   if (builtinConfig(ctx, 'google')) out.push({ id: 'google', name: 'Google', kind: 'google', url: '/api/auth/sso/google/start' });
   if (builtinConfig(ctx, 'microsoft')) out.push({ id: 'microsoft', name: 'Microsoft', kind: 'microsoft', url: '/api/auth/sso/microsoft/start' });

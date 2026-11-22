@@ -1,14 +1,13 @@
 // Governance for an owner (an organization, or a single user's account): who has which role, custom roles, the
-// organization-wide policy, what the owner's plan or licence includes, and the audit log export.
+// organization-wide policy and the audit log export.
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { and, auditLog, customRoles, desc, eq, gt, inArray, lt, or, orgMembers, repoCollaborators, repositories, sql, users, type Namespace, type User } from '@jumper/db';
-import { customRoleSchema, orgPolicySchema, roleRefSchema, type Capability, type CustomRoleInfo, type Entitlements, type OrgMemberInfo, type OrgPolicy } from '@jumper/shared';
+import { customRoleSchema, orgPolicySchema, roleRefSchema, type Capability, type CustomRoleInfo, type OrgMemberInfo, type OrgPolicy } from '@jumper/shared';
 import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
 import { audit } from '../audit/audit';
 import { requireScope, requireUser } from '../auth/plugin';
-import { entitlementsFor, requireFeature } from '../license/license';
 import { validatePattern } from '../protection/service';
 import { findNamespace, orgRoleFor } from '../repos/access';
 import { toUserSummary } from '../repos/serialize';
@@ -44,11 +43,6 @@ const csvCell = (v: unknown): string => {
 
 const policyRoutes: FastifyPluginAsyncZod = async (app) => {
   const ctx = app.ctx;
-
-  app.get('/owners/:owner/entitlements', { schema: { params: ownerParams } }, async (req): Promise<Entitlements> => {
-    const { ns } = await loadOwner(req, req.params.owner, 'member');
-    return entitlementsFor(ctx, ns);
-  });
 
   // ---------- members and their roles ----------
 
@@ -118,7 +112,6 @@ const policyRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post('/owners/:owner/roles', { schema: { params: ownerParams, body: customRoleSchema } }, async (req): Promise<CustomRoleInfo[]> => {
     requireScope(req, 'admin');
     const { ns } = await loadOwner(req, req.params.owner, 'owner');
-    await requireFeature(ctx, ns, 'custom_roles');
     checkRole(req.body);
     const [{ n }] = (await ctx.db.select({ n: sql<number>`count(*)::int` }).from(customRoles).where(eq(customRoles.namespaceId, ns.id))) as [{ n: number }];
     if (n >= 30) throw badRequest('An owner can have up to 30 custom roles');
@@ -132,7 +125,6 @@ const policyRoutes: FastifyPluginAsyncZod = async (app) => {
   app.put('/owners/:owner/roles/:id', { schema: { params: ownerParams.extend({ id: z.uuid() }), body: customRoleSchema } }, async (req): Promise<CustomRoleInfo[]> => {
     requireScope(req, 'admin');
     const { ns } = await loadOwner(req, req.params.owner, 'owner');
-    await requireFeature(ctx, ns, 'custom_roles');
     checkRole(req.body);
     const dup = await ctx.db.select({ id: customRoles.id }).from(customRoles).where(and(eq(customRoles.namespaceId, ns.id), sql`lower(${customRoles.name}) = lower(${req.body.name})`)).limit(1);
     if (dup[0] && dup[0].id !== req.params.id) throw conflict('A role with that name already exists');
@@ -160,9 +152,9 @@ const policyRoutes: FastifyPluginAsyncZod = async (app) => {
 
   // ---------- organization-wide policy ----------
 
-  app.get('/owners/:owner/policy', { schema: { params: ownerParams } }, async (req): Promise<{ policy: OrgPolicy; entitlements: Entitlements }> => {
+  app.get('/owners/:owner/policy', { schema: { params: ownerParams } }, async (req): Promise<{ policy: OrgPolicy }> => {
     const { ns } = await loadOwner(req, req.params.owner, 'member');
-    return { policy: await getOrgPolicy(ctx, ns.id), entitlements: await entitlementsFor(ctx, ns) };
+    return { policy: await getOrgPolicy(ctx, ns.id) };
   });
 
   app.put('/owners/:owner/policy', { schema: { params: ownerParams, body: orgPolicySchema } }, async (req): Promise<{ policy: OrgPolicy }> => {
@@ -170,10 +162,6 @@ const policyRoutes: FastifyPluginAsyncZod = async (app) => {
     const { ns, user } = await loadOwner(req, req.params.owner, 'owner');
     const p = req.body;
     const before = await getOrgPolicy(ctx, ns.id);
-    const changed = (keys: (keyof OrgPolicy)[]) => keys.some((k) => JSON.stringify(p[k]) !== JSON.stringify(before[k]));
-    // Each part of the policy belongs to a feature; only what actually changes has to be included in the plan.
-    if (changed(['requiredChecks', 'minApprovals', 'signoffRules', 'partPolicy', 'releaseBranches', 'requireWatermark', 'defaultWatermark'])) await requireFeature(ctx, ns, 'org_policies');
-    if (changed(['requireTwoFactor', 'ipAllowlist', 'sessionMaxHours'])) await requireFeature(ctx, ns, 'security_policies');
     for (const b of p.releaseBranches) {
       const err = validatePattern(b);
       if (err) throw badRequest(`Release branch "${b}": ${err}`);
@@ -209,8 +197,6 @@ const policyRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get('/owners/:owner/audit', { schema: { params: ownerParams, querystring: auditQuery } }, async (req, reply) => {
     const { ns } = await loadOwner(req, req.params.owner, 'owner');
     const q = req.query;
-    const exporting = q.format === 'csv' || (q.limit ?? 0) > 200;
-    if (exporting) await requireFeature(ctx, ns, 'audit_export');
     const repoIds = (await ctx.db.select({ id: repositories.id }).from(repositories).where(eq(repositories.namespaceId, ns.id))).map((r) => r.id);
     const scope = or(
       eq(auditLog.namespaceId, ns.id),

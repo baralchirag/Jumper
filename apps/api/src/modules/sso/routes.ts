@@ -12,13 +12,10 @@ import { encryptSecret, signToken, verifyToken } from '../../lib/secrets';
 import { audit } from '../audit/audit';
 import { requireScope, requireUser, startSession } from '../auth/plugin';
 import { createUser } from '../auth/routes';
-import { requireFeature } from '../license/license';
 import { findNamespace, orgRoleFor } from '../repos/access';
-import { assertOrgSeat } from '../usage/service';
 import { authorizeUrl, exchangeCode, pkcePair, type OidcConfig } from './oidc';
 import { builtinConfig, callbackUrl, connectionForEmail, isBuiltin, oidcConfig, toConnectionInfo } from './providers';
 import { normalizeCertificate, samlIdentity, samlMetadata, samlRedirectUrl } from './saml';
-import { seatsChanged } from '../stripe/service';
 import { claimOnce } from '../../lib/once';
 
 const STATE_COOKIE = 'sso_state';
@@ -110,9 +107,7 @@ export async function resolveIdentity(ctx: Ctx, id: Identity, conn: SsoConnectio
   });
   // Someone who arrives through an organization's own directory is a member of that organization.
   if (ns?.orgId) {
-    await assertOrgSeat(ctx, ns, user.id);
     await ctx.db.insert(orgMembers).values({ orgId: ns.orgId, userId: user.id, role: 'member' }).onConflictDoNothing();
-    seatsChanged(ctx, { orgId: ns.orgId });
   }
   return link(user);
 }
@@ -136,14 +131,11 @@ const ssoRoutes: FastifyPluginAsyncZod = async (app) => {
   const loadConnection = async (id: string): Promise<SsoConnection> => {
     const row = /^[0-9a-f-]{36}$/.test(id) ? (await ctx.db.select().from(ssoConnections).where(eq(ssoConnections.id, id)).limit(1))[0] : undefined;
     if (!row) throw notFound('Single sign-on connection not found');
-    const ns = row.namespaceId ? ((await ctx.db.select().from(namespaces).where(eq(namespaces.id, row.namespaceId)).limit(1))[0] ?? null) : null;
-    await requireFeature(ctx, ns, row.kind === 'saml' ? 'saml' : 'sso');
     return row;
   };
 
   const resolveOidc = async (id: string): Promise<{ cfg: OidcConfig; conn: SsoConnection | null }> => {
     if (isBuiltin(id)) {
-      await requireFeature(ctx, null, 'sso');
       const cfg = builtinConfig(ctx, id);
       if (!cfg) throw badRequest(`Sign-in with ${id === 'google' ? 'Google' : 'Microsoft'} is not configured`);
       return { cfg, conn: null };
@@ -277,7 +269,6 @@ const ssoRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.post('/sso/:org/connections', { schema: { params: orgParams, body: ssoConnectionSchema } }, async (req): Promise<SsoConnectionInfo> => {
     const ns = await scope(req, req.params.org);
-    await requireFeature(ctx, ns, req.body.kind === 'saml' ? 'saml' : 'sso');
     if ((await list(ns)).length >= 5) throw badRequest('At most five connections');
     await assertDomainsFree(req.body.domains);
     const [row] = await ctx.db

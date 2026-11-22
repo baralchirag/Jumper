@@ -8,10 +8,8 @@ import { requireScope, requireUser } from '../auth/plugin';
 import { conflict, forbidden, notFound } from '../../lib/errors';
 import { randomToken, sha256 } from '../../lib/crypto';
 import { findNamespace, orgRoleFor } from '../repos/access';
-import { assertOrgSeat } from '../usage/service';
 import { audit } from '../audit/audit';
 import { sendMail } from '../mail/mailer';
-import { seatsChanged } from '../stripe/service';
 
 const TTL_DAYS = 7;
 const token = z.object({ token: z.string().min(20).max(200) });
@@ -111,7 +109,6 @@ const inviteRoutes: FastifyPluginAsyncZod = async (app) => {
     const orgNs = await findNamespace(ctx, ns[0]!.slug);
     if (!orgNs) throw notFound('Organization not found');
     if ((await orgRoleFor(ctx, org.id, user.id)) !== null) throw conflict(`You are already in ${org.name}`);
-    await assertOrgSeat(ctx, orgNs, user.id);
     // Claim the invite first so a link raced from two tabs can only ever add one person.
     const claimed = await ctx.db
       .update(orgInvites)
@@ -120,7 +117,6 @@ const inviteRoutes: FastifyPluginAsyncZod = async (app) => {
       .returning({ id: orgInvites.id });
     if (!claimed.length) throw notFound('This invite link has just been used. Ask for a new one.');
     await ctx.db.insert(orgMembers).values({ orgId: org.id, userId: user.id, role: invite.role, repoRole: invite.repoRole }).onConflictDoNothing();
-    seatsChanged(ctx, { orgId: org.id });
     await audit(req, 'org.invite.accept', { type: 'org', id: org.id }, { user: user.username, role: invite.role });
     return { org: orgNs.slug };
   });

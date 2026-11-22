@@ -16,7 +16,7 @@ import {
   type Repository,
   type User,
 } from '@jumper/db';
-import { KICAD_GITIGNORE, collaboratorSchema, isPlanId, createRepoSchema, pinsSchema, updateRepoSchema, type NamespaceInfo, type RepoInfo } from '@jumper/shared';
+import { KICAD_GITIGNORE, collaboratorSchema, createRepoSchema, pinsSchema, updateRepoSchema, type NamespaceInfo, type RepoInfo } from '@jumper/shared';
 import { requireScope, requireUser } from '../auth/plugin';
 import { GitRepo } from '../git/repo';
 import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
@@ -25,16 +25,13 @@ import { SAMPLE_PROJECT, SAMPLE_README } from './sample';
 import { accessesFor, canManageNamespace, findNamespace, findRepo, loadRepo, repoDiskPath } from './access';
 import { accessDenial } from '../policy/service';
 import { audit } from '../audit/audit';
-import { requireFeature } from '../license/license';
 import { assertRepoNotHeld, holdOnRepo } from '../legal/holds';
 import { findTemplate, templateInfos } from './templates';
 import { resolveRoleRef } from '../roles/service';
 import { signatureFor } from '../git/signature';
 import { enqueueAnalysis } from './push';
-import { assertCollaboratorSeat } from '../usage/service';
 import { toRepoInfo, toUserSummary } from './serialize';
 import type { Ctx } from '../../context';
-import { seatsChanged } from '../stripe/service';
 
 /** Write a path → content map as a git tree (folders included) and return its id. */
 async function writeTree(git: GitRepo, files: Record<string, string>): Promise<string> {
@@ -189,7 +186,6 @@ const repoRoutes: FastifyPluginAsyncZod = async (app) => {
         repos,
         pinned,
         stats,
-        plan: isPlanId(ns.plan) ? ns.plan : 'free',
       };
     }
     const org = (await ctx.db.select().from(organizations).where(eq(organizations.id, ns.orgId!)).limit(1))[0]!;
@@ -209,7 +205,6 @@ const repoRoutes: FastifyPluginAsyncZod = async (app) => {
       pinned,
       stats,
       members: members.map((m) => ({ ...toUserSummary(m.user), role: m.role })),
-      plan: isPlanId(ns.plan) ? ns.plan : 'free',
     };
   });
 
@@ -316,7 +311,6 @@ const repoRoutes: FastifyPluginAsyncZod = async (app) => {
     if (b.exportControlled !== undefined && b.exportControlled !== r.repo.exportControlled) {
       // Marking is an administrator's decision (they also decide who is cleared), and it cannot be undone by the owner.
       if (!req.user?.isAdmin) throw forbidden('Only an instance administrator can change the export-control flag');
-      await requireFeature(ctx, null, 'export_control');
       patch.exportControlled = b.exportControlled;
     }
     if ((patch.exportControlled ?? r.repo.exportControlled) && (patch.visibility ?? r.repo.visibility) === 'public') {
@@ -364,13 +358,11 @@ const repoRoutes: FastifyPluginAsyncZod = async (app) => {
       const target = (await ctx.db.select().from(users).where(sql`lower(${users.username}) = lower(${req.params.username})`).limit(1))[0];
       if (!target) throw notFound('User not found');
       if (r.repo.exportControlled && !target.exportCleared) throw badRequest(`${target.username} is not cleared for export-controlled work. An administrator has to clear them first.`);
-      await assertCollaboratorSeat(ctx, r.repo, target.id);
       const grant = await resolveRoleRef(ctx, r.ns, req.body.role);
       await ctx.db
         .insert(repoCollaborators)
         .values({ repoId: r.repo.id, userId: target.id, ...grant })
         .onConflictDoUpdate({ target: [repoCollaborators.repoId, repoCollaborators.userId], set: grant });
-      seatsChanged(ctx, { namespaceId: r.repo.namespaceId });
       await audit(req, 'repo.collaborator.set', { type: 'repo', id: r.repo.id }, { user: target.username, role: req.body.role });
       return { ok: true };
     },
@@ -384,7 +376,6 @@ const repoRoutes: FastifyPluginAsyncZod = async (app) => {
       const target = (await ctx.db.select().from(users).where(sql`lower(${users.username}) = lower(${req.params.username})`).limit(1))[0];
       if (!target) throw notFound('User not found');
       await ctx.db.delete(repoCollaborators).where(and(eq(repoCollaborators.repoId, r.repo.id), eq(repoCollaborators.userId, target.id)));
-      seatsChanged(ctx, { namespaceId: r.repo.namespaceId });
       await audit(req, 'repo.collaborator.remove', { type: 'repo', id: r.repo.id }, { user: target.username });
       return { ok: true };
     },

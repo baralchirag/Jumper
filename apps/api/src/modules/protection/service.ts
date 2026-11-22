@@ -96,19 +96,13 @@ export function hookRules(rules: BranchProtection[], isAdmin: boolean): string {
     .join('\n');
 }
 
-/** Enforced by git itself, so it covers every client. Rules come from JUMPER_PROTECT; JUMPER_REFUSE carries a plan-limit refusal. */
+/** Enforced by git itself, so it covers every client. Rules come from JUMPER_PROTECT. */
 export const PRE_RECEIVE_HOOK = `#!/bin/sh
 # Jumper branch protection (generated; do not edit).
 zero=0000000000000000000000000000000000000000
 tab=$(printf '\\t')
 fail=0
-refused=0
 while read -r old new ref; do
-  # JUMPER_REFUSE (plan limits): refuse anything that adds or updates a ref; deleting refs is still allowed.
-  if [ -n "$JUMPER_REFUSE" ] && [ "$new" != "$zero" ]; then
-    [ "$refused" = 1 ] || printf 'error: %s\n' "$JUMPER_REFUSE" >&2
-    refused=1; fail=1; continue
-  fi
   case "$ref" in refs/heads/*) ;; *) continue ;; esac
   branch=\${ref#refs/heads/}
   while IFS="$tab" read -r pat flags; do
