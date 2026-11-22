@@ -21,6 +21,7 @@ class FakeStripe {
   sessions: Record<string, string>[] = [];
   subs = new Map<string, any>();
   invoices: Record<string, any>[] = [];
+  refunds: Record<string, string>[] = [];
   calls: string[] = [];
 
   id(prefix: string) {
@@ -43,6 +44,7 @@ class FakeStripe {
     this.sessions = [];
     this.subs.clear();
     this.invoices = [];
+    this.refunds = [];
     this.calls = [];
   }
 
@@ -83,15 +85,40 @@ class FakeStripe {
       return [200, c];
     }
     if (req.method === 'POST' && path === '/v1/checkout/sessions') {
-      this.sessions.push(form as Record<string, string>);
-      return [200, { id: this.id('cs'), object: 'checkout.session', url: 'https://checkout.stripe.test/pay' }];
+      this.sessions.push({ ...(form as Record<string, string>), _id: this.id('cs'), _status: 'open' });
+      return [200, { id: this.sessions.at(-1)!._id, object: 'checkout.session', url: 'https://checkout.stripe.test/pay' }];
+    }
+    if (req.method === 'GET' && path === '/v1/checkout/sessions') {
+      const c = u.searchParams.get('customer');
+      return [200, { object: 'list', data: this.sessions.filter((x) => x.customer === c && x._status === 'open').map((x) => ({ id: x._id, object: 'checkout.session', status: 'open' })), has_more: false }];
+    }
+    if (req.method === 'POST' && /^\/v1\/checkout\/sessions\/[^/]+\/expire$/.test(path)) {
+      const sess = this.sessions.find((x) => x._id === path.split('/')[4]);
+      if (sess) sess._status = 'expired';
+      return [200, { id: path.split('/')[4], object: 'checkout.session', status: 'expired' }];
+    }
+    if (req.method === 'DELETE' && path.startsWith('/v1/subscriptions/')) {
+      const sub = this.subs.get(path.split('/').pop()!);
+      if (sub) sub.status = 'canceled';
+      return sub ? [200, sub] : err(404, 'No such subscription');
+    }
+    if (req.method === 'GET' && path === '/v1/invoice_payments') {
+      const inv = this.invoices.find((x) => x.id === u.searchParams.get('invoice'));
+      return [200, { object: 'list', data: inv ? [{ id: 'inpay_' + inv.id, object: 'invoice_payment', status: 'paid', payment: { type: 'payment_intent', payment_intent: 'pi_' + inv.id } }] : [], has_more: false }];
+    }
+    if (req.method === 'POST' && path === '/v1/refunds') {
+      this.refunds.push(form as Record<string, string>);
+      return [200, { id: this.id('re'), object: 'refund', status: 'succeeded' }];
     }
     if (req.method === 'POST' && path === '/v1/billing_portal/sessions') return [200, { id: this.id('bps'), object: 'billing_portal.session', url: 'https://billing.stripe.test/p' }];
     if (req.method === 'GET' && path === '/v1/subscriptions') {
       const c = u.searchParams.get('customer');
       return [200, { object: 'list', data: [...this.subs.values()].filter((x) => x.customer === c).reverse(), has_more: false }];
     }
-    if (req.method === 'GET' && path === '/v1/invoices') return [200, { object: 'list', data: this.invoices.filter((x) => x.customer === u.searchParams.get('customer')), has_more: false }];
+    if (req.method === 'GET' && path === '/v1/invoices') {
+      const sub = u.searchParams.get('subscription');
+      return [200, { object: 'list', data: this.invoices.filter((x) => (sub ? x.subscription === sub : x.customer === u.searchParams.get('customer'))), has_more: false }];
+    }
     if (path.startsWith('/v1/subscriptions/')) {
       const sub = this.subs.get(path.split('/').pop()!);
       if (!sub) return err(404, 'No such subscription');
@@ -294,6 +321,53 @@ describe.skipIf(!dbAvailable)('card payments with Stripe', () => {
     expect(d.json.members[0]).toMatchObject({ username: 'alice', role: 'owner' });
     expect(d.json.stripeDashboardUrl).toBe(`https://dashboard.stripe.com/test/customers/${a.stripe_customer_id}`);
     expect(d.json.events.map((e: { action: string }) => e.action)).toContain('billing.checkout');
+  });
+
+  it('never charges twice: a new checkout expires the old one, and a duplicate subscription is cancelled and refunded', async () => {
+    const alice = await h.user('alice');
+    await alice.post('/api/owners/alice/billing/checkout', { plan: 'pro', cycle: 'monthly' });
+    await alice.post('/api/owners/alice/billing/checkout', { plan: 'pro', cycle: 'monthly' });
+    expect(stripe.sessions.map((x) => x._status)).toEqual(['expired', 'open']);
+
+    const a = await ns('alice');
+    const first = stripe.subscribe(a.stripe_customer_id, a.id, 'jumper_pro_monthly');
+    await webhook('customer.subscription.created', first);
+    // Both pages were paid anyway (e.g. before the expiry landed): a second subscription arrives.
+    const second = stripe.subscribe(a.stripe_customer_id, a.id, 'jumper_pro_monthly');
+    stripe.invoices.push({ id: 'in_dup', object: 'invoice', status: 'paid', subscription: second.id, customer: a.stripe_customer_id, total: 1200, subtotal: 1200, created: 1, status_transitions: {}, lines: { object: 'list', data: [] } });
+    await webhook('customer.subscription.created', second);
+    expect(stripe.subs.get(second.id).status).toBe('canceled');
+    expect(stripe.subs.get(first.id).status).toBe('active');
+    expect(stripe.refunds).toHaveLength(1);
+    expect(stripe.refunds[0]).toMatchObject({ payment_intent: 'pi_in_dup', reason: 'duplicate' });
+    expect((await ns('alice')).stripe_subscription_id).toBe(first.id);
+  });
+
+  it('refuses tampered requests: other owners, unknown plans, extra fields', async () => {
+    const alice = await h.user('alice');
+    await h.user('mallory');
+    const mallory = await h.user('mallory2');
+    // Price, quantity and customer come from the server; the body can only pick a plan and cycle.
+    const res = await alice.post('/api/owners/alice/billing/checkout', { plan: 'pro', cycle: 'monthly', unit_amount: 1, quantity: 0, price: 'price_free' });
+    expect(res.status).toBe(200);
+    const sess = stripe.sessions.at(-1)!;
+    expect(sess['line_items[0][quantity]']).toBe('1');
+    expect(stripe.prices.find((p) => p.id === sess['line_items[0][price]'])!.unit_amount).toBe(1200);
+    for (const plan of ['free', 'enterprise', 'admin', '']) expect((await alice.post('/api/owners/alice/billing/checkout', { plan, cycle: 'monthly' })).status).toBe(400);
+    // Someone else's account: hidden, not just forbidden.
+    expect((await mallory.post('/api/owners/alice/billing/checkout', { plan: 'pro', cycle: 'monthly' })).status).toBe(404);
+    expect((await mallory.post('/api/owners/alice/billing/portal')).status).toBe(404);
+    expect((await mallory.post('/api/owners/alice/billing/sync')).status).toBe(404);
+    expect((await mallory.req('PUT', '/api/owners/alice/billing/subscription', { plan: 'team', cycle: 'monthly' })).status).toBe(404);
+    expect((await mallory.get('/api/owners/alice/billing')).status).toBe(404);
+    // Anonymous.
+    expect((await h.anon.post('/api/owners/alice/billing/checkout', { plan: 'pro', cycle: 'monthly' })).status).toBe(401);
+    // A webhook event signed with another secret is refused, and so is one with a stale timestamp.
+    const payload = JSON.stringify({ id: 'evt_forged', object: 'event', type: 'customer.subscription.created', data: { object: {} } });
+    const wrong = signer.webhooks.generateTestHeaderString({ payload, secret: 'whsec_attacker' });
+    expect((await h.app.inject({ method: 'POST', url: '/api/stripe/webhook', payload, headers: { 'content-type': 'application/json', 'stripe-signature': wrong } })).statusCode).toBe(400);
+    const stale = signer.webhooks.generateTestHeaderString({ payload, secret: SECRET, timestamp: Math.floor(Date.now() / 1000) - 3600 });
+    expect((await h.app.inject({ method: 'POST', url: '/api/stripe/webhook', payload, headers: { 'content-type': 'application/json', 'stripe-signature': stale } })).statusCode).toBe(400);
   });
 
   it('only owners can start billing, and members of an organization cannot', async () => {

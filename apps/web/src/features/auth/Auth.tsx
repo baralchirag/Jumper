@@ -7,6 +7,7 @@ import revA from '../home/diff/assets/rev-a.webp';
 import { Logo } from '../../app/AppShell';
 import { ApiError, api, errorMessage } from '../../shared/lib/api';
 import { keys, useProviders } from '../../shared/lib/queries';
+import { safeRedirect } from '../../shared/lib/redirect';
 
 function GithubButton() {
   return (
@@ -55,7 +56,6 @@ export function AuthFrame({ title, children, footer }: { title: string; children
   );
 }
 
-const safeRedirect = (r: string | undefined) => (r && r.startsWith('/') && !r.startsWith('//') ? r : '/');
 
 function SsoButton({ p, to, email }: { p: SsoProvider; to: string; email?: string }) {
   const href = `${p.url}?to=${encodeURIComponent(to)}${email ? `&email=${encodeURIComponent(email)}` : ''}`;

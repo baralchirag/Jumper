@@ -29,6 +29,11 @@ for (const [net, bits] of [
   ['ff00::', 8],
   ['2001:db8::', 32],
   ['64:ff9b::', 96],
+  // Forms that embed an IPv4 address (and so can point at 127.0.0.1 or 169.254.169.254): IPv4-compatible,
+  // IPv4-translated (SIIT) and 6to4. None has a legitimate use as a webhook or mirror destination.
+  ['::', 96],
+  ['::ffff:0:0:0', 96],
+  ['2002::', 16],
 ] as const) {
   blocked.addSubnet(net, bits, 'ipv6');
 }

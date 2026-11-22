@@ -144,6 +144,9 @@ export async function createCheckout(ctx: Ctx, ns: Namespace, email: string, pla
   if (limit !== null && seats > limit) throw badRequest(`${ns.slug} has ${seats} seats in use; the ${ctx.env.plans[plan].name} plan allows ${limit}. Choose a bigger plan.`);
   const site = ctx.env.PUBLIC_URL.replace(/\/$/, '');
   const back = from === 'pricing' ? `${site}/pricing` : `${site}${billingPath(ns)}`;
+  // Only one payable checkout page at a time: two open tabs (or a double click) must not lead to two subscriptions.
+  const open = await stripe.checkout.sessions.list({ customer, status: 'open', limit: 10 });
+  await Promise.all(open.data.map((x) => stripe.checkout.sessions.expire(x.id).catch(() => {})));
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
     customer,
@@ -291,6 +294,15 @@ export async function applySubscription(ctx: Ctx, sub: Stripe.Subscription): Pro
   if (!ns) return null;
   // An event for an older subscription must not overwrite the current one.
   if (ns.stripeSubscriptionId && ns.stripeSubscriptionId !== sub.id && hasLiveSubscription(ns) && sub.status !== 'active') return ns;
+  // A second paid subscription for an account that already has one (two checkouts paid in parallel): keep the first,
+  // cancel the newer one and refund what it charged, so nobody pays twice.
+  if (ns.stripeSubscriptionId && ns.stripeSubscriptionId !== sub.id && ns.subscriptionStatus && ACTIVE.has(ns.subscriptionStatus) && ACTIVE.has(sub.status)) {
+    const existing = await stripeFor(ctx).subscriptions.retrieve(ns.stripeSubscriptionId).catch(() => null);
+    if (existing && ACTIVE.has(existing.status)) {
+      await cancelDuplicate(ctx, sub);
+      return ns;
+    }
+  }
   const item = sub.items.data[0];
   const priced = item?.price ? planOfPrice(item.price) : null;
   // Since API version 2025-03-31 the period lives on the item; older versions keep it on the subscription.
@@ -313,6 +325,21 @@ export async function applySubscription(ctx: Ctx, sub: Stripe.Subscription): Pro
   }
   const [updated] = await ctx.db.update(namespaces).set(set).where(eq(namespaces.id, ns.id)).returning();
   return updated ?? null;
+}
+
+/** Cancel a duplicate subscription now and refund its payments. Best effort: failures are left for an administrator. */
+async function cancelDuplicate(ctx: Ctx, sub: Stripe.Subscription): Promise<void> {
+  const stripe = stripeFor(ctx);
+  await stripe.subscriptions.cancel(sub.id, { prorate: false, invoice_now: false }).catch(() => {});
+  const invs = await stripe.invoices.list({ subscription: sub.id, status: 'paid', limit: 5 }).catch(() => null);
+  for (const inv of invs?.data ?? []) {
+    if (!inv.id) continue;
+    const pays = await stripe.invoicePayments.list({ invoice: inv.id, limit: 5 }).catch(() => null);
+    for (const pay of pays?.data ?? []) {
+      const pi = pay.payment.payment_intent;
+      if (pay.status === 'paid' && pi) await stripe.refunds.create({ payment_intent: typeof pi === 'string' ? pi : pi.id, reason: 'duplicate' }, { idempotencyKey: `jumper-dup-refund-${inv.id}` }).catch(() => {});
+    }
+  }
 }
 
 /** Mirror a Stripe invoice into the invoice list, so card and manual invoices show in one place. */

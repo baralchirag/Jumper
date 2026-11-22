@@ -10,6 +10,7 @@ import { audit } from '../audit/audit';
 import { verifyPassword } from './passwords';
 import { requireUser } from './plugin';
 import { hashRecoveryCode, newRecoveryCodes, newTotpSecret, otpauthUri, verifyTotp } from './totp';
+import { assertNotLocked, recordFailure, twoFactorKey } from './guard';
 
 /** Check an authenticator code, or spend a recovery code. */
 export async function checkSecondFactor(ctx: Ctx, user: User, code: string): Promise<boolean> {
@@ -74,7 +75,12 @@ const twoFactorRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post('/recovery-codes', { schema: { body: totpCodeSchema } }, async (req) => {
     const user = requireUser(req);
     if (!user.totpEnabledAt) throw badRequest('Two-factor login is off');
-    if (!(await checkSecondFactor(ctx, user, req.body.code))) throw badRequest('That code is not right');
+    // A stolen session must not be able to guess its way to new recovery codes.
+    await assertNotLocked(ctx, twoFactorKey(user.id));
+    if (!(await checkSecondFactor(ctx, user, req.body.code))) {
+      await recordFailure(ctx, twoFactorKey(user.id));
+      throw badRequest('That code is not right');
+    }
     const { codes, hashes } = newRecoveryCodes();
     await ctx.db.update(users).set({ recoveryCodes: hashes }).where(eq(users.id, user.id));
     await audit(req, 'user.two_factor.recovery_codes', { type: 'user', id: user.id });
@@ -85,9 +91,14 @@ const twoFactorRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post('/disable', { schema: { body: z.object({ code: z.string().trim().max(20).optional(), password: z.string().max(256).optional() }) } }, async (req) => {
     const user = requireUser(req);
     if (!user.totpEnabledAt) return { ok: true };
+    // Turning two-factor off is what an attacker with a stolen session wants most: guesses are throttled per account.
+    await assertNotLocked(ctx, twoFactorKey(user.id));
     const byCode = req.body.code ? await checkSecondFactor(ctx, user, req.body.code) : false;
     const byPassword = !byCode && req.body.password && user.passwordHash ? await verifyPassword(user.passwordHash, req.body.password) : false;
-    if (!byCode && !byPassword) throw badRequest('Enter a current code, a recovery code or your password');
+    if (!byCode && !byPassword) {
+      await recordFailure(ctx, twoFactorKey(user.id));
+      throw badRequest('Enter a current code, a recovery code or your password');
+    }
     await ctx.db.update(users).set({ totpEnabledAt: null, totpSecret: null, recoveryCodes: [] }).where(eq(users.id, user.id));
     await audit(req, 'user.two_factor.disabled', { type: 'user', id: user.id });
     return { ok: true, requiredBy: await requiredBy(ctx, user.id) };

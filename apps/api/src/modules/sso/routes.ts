@@ -19,6 +19,7 @@ import { authorizeUrl, exchangeCode, pkcePair, type OidcConfig } from './oidc';
 import { builtinConfig, callbackUrl, connectionForEmail, isBuiltin, oidcConfig, toConnectionInfo } from './providers';
 import { normalizeCertificate, samlIdentity, samlMetadata, samlRedirectUrl } from './saml';
 import { seatsChanged } from '../stripe/service';
+import { claimOnce } from '../../lib/once';
 
 const STATE_COOKIE = 'sso_state';
 const STATE_TTL_MS = 10 * 60_000;
@@ -220,6 +221,8 @@ const ssoRoutes: FastifyPluginAsyncZod = async (app) => {
     const relay = body.RelayState ? verifyToken<{ c: string; r: string; exp: number }>(ctx.env, body.RelayState) : null;
     const returnTo = relay && relay.c === conn.id && relay.exp > Date.now() ? safeReturn(relay.r) : '/';
     const who = await samlIdentity(ctx, conn, body.SAMLResponse);
+    // A valid response works once: a copy captured from a log, proxy or browser history can't start another session.
+    if (!(await claimOnce(ctx, `saml:${conn.id}`, body.SAMLResponse, 24 * 3600))) throw badRequest('This sign-in response has already been used. Sign in again.');
     return finish(req, reply, ctx, { connection: conn.id, subject: who.subject, email: who.email, emailVerified: true, name: who.name }, conn, returnTo);
   });
 

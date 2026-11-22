@@ -20,16 +20,7 @@
     <meta name="twitter:image" content="/og-image.png" />
     <meta name="theme-color" content="#101112" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#f1f2ef" media="(prefers-color-scheme: light)" />
-    <script>
-      // Apply the theme before first paint to avoid a flash.
-      (function () {
-        try {
-          var t = localStorage.getItem('jumper-theme') || 'system';
-          var dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-          document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-        } catch (e) {}
-      })();
-    </script>
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

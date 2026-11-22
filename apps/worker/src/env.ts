@@ -9,7 +9,14 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().default('redis://localhost:6379'),
   REPOS_DIR: z.string().default('./data/repos'),
-  WORKER_SANDBOX: z.enum(['docker', 'none']).default('none'),
+  /**
+   * How kicad-cli is isolated from the rest of the server:
+   *  - bwrap: bubblewrap, no network, sees only system files and the job's scratch directory (no Docker needed);
+   *  - docker: a fresh container per call;
+   *  - none: a scrubbed environment and timeouts only (use only inside the hardened worker container);
+   *  - auto (default): bwrap when it works on this machine, otherwise none with a warning at startup.
+   */
+  WORKER_SANDBOX: z.enum(['auto', 'bwrap', 'docker', 'none']).default('auto'),
   WORKER_KICAD_IMAGE: z.string().default('jumper/kicad-worker:latest'),
   /** Slow lane: renders and exports. Each running job wants about 2 vCPU and 4 GB. */
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(2),
@@ -53,7 +60,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): WorkerEnv {
   const parsed = envSchema.safeParse(cleaned);
   if (!parsed.success) throw new Error(`Invalid environment:\n${z.prettifyError(parsed.error)}`);
   const d = parsed.data;
-  const hostSpawn = d.WORKER_SANDBOX === 'none' && (d.KICAD_CLI === 'host' || (d.KICAD_CLI === 'auto' && inFlatpak()));
+  const hostSpawn = (d.WORKER_SANDBOX === 'none' || d.WORKER_SANDBOX === 'auto') && (d.KICAD_CLI === 'host' || (d.KICAD_CLI === 'auto' && inFlatpak()));
   // The Flatpak sandbox has a private /tmp, so host-side kicad-cli needs a shared scratch dir.
   const tmpDir = d.WORKER_TMP_DIR ? resolveDataPath(d.WORKER_TMP_DIR) : hostSpawn ? resolveDataPath('./data/tmp') : tmpdir();
   let overrides: unknown;

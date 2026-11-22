@@ -1,3 +1,6 @@
+// Pixi compiles shaders and uniform uploads with new Function() unless this is loaded first. The site's
+// Content-Security-Policy forbids eval, so without it the board and schematic viewers fail in production.
+import 'pixi.js/unsafe-eval';
 import { Application, Container, Graphics } from 'pixi.js';
 import type { BBox, Pt } from '@jumper/kicad-core/types';
 

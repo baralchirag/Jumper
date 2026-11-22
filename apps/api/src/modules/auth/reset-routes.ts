@@ -7,6 +7,7 @@ import { audit } from '../audit/audit';
 import { sendMail } from '../mail/mailer';
 import type { Ctx } from '../../context';
 import { hashPassword } from './passwords';
+import { accountKey, clearFailures, loginKey } from './guard';
 
 const RESET_TTL_MS = 60 * 60 * 1000;
 const passwordSchema = z.string().min(10, 'Use at least 10 characters').max(256);
@@ -70,6 +71,10 @@ const resetRoutes: FastifyPluginAsyncZod = async (app) => {
       await tx.update(passwordResets).set({ usedAt: new Date() }).where(eq(passwordResets.id, row.reset.id));
       // Whoever had the old password (or a stolen session) is signed out everywhere.
       await tx.delete(sessions).where(eq(sessions.userId, row.user.id));
+      // A successful reset proves ownership: lift any sign-in lockout so the owner can get straight back in.
+      await clearFailures(ctx, accountKey(row.user.id));
+      await clearFailures(ctx, loginKey(row.user.username));
+      await clearFailures(ctx, loginKey(row.user.email));
     });
     await audit(req, 'user.password_reset', { type: 'user', id: row.user.id }, {}, row.user.id);
     return { ok: true };

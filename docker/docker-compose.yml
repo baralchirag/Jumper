@@ -98,7 +98,7 @@ services:
     environment:
       <<: *env
       # The worker image *is* the hardened KiCad sandbox: no host docker socket needed.
-      WORKER_SANDBOX: none
+      WORKER_SANDBOX: ${WORKER_SANDBOX:-auto}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
       WORKER_CHECKS_CONCURRENCY: ${WORKER_CHECKS_CONCURRENCY:-1}
     volumes: [repos:/data/repos:ro]

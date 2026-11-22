@@ -10,6 +10,7 @@ import { buildApp } from '../app';
 import { createContext, type Ctx } from '../context';
 import { loadEnv } from '../env';
 import { GitRepo } from '../modules/git/repo';
+import { resetGuardMemory } from '../modules/auth/guard';
 
 const BASE = process.env.TEST_DATABASE_URL ?? 'postgres://pcbhub:pcbhub@localhost:5432/pcbhub_test';
 
@@ -112,6 +113,7 @@ export async function createHarness(opts: { env?: Record<string, string> } = {})
     anon,
     async reset() {
       await ctx.db.execute(sql`truncate table users, organizations, namespaces, blob_diffs, audit_log restart identity cascade`);
+      resetGuardMemory();
     },
     async user(username) {
       const c = new Client(app, username);

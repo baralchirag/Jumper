@@ -10,14 +10,18 @@ import { deleteUserAccount, deletionPreview, GHOST_USERNAME } from '../user/dele
 import { audit } from '../audit/audit';
 import { toUserSummary } from '../repos/serialize';
 
-/** Columns that hold secrets. They are listed but their values are never sent. */
+/**
+ * Columns that hold secrets. They are listed but their values are never sent. Anything whose name looks like a
+ * secret is hidden by rule, so a new table can't leak by being forgotten here; the list adds columns the rule misses.
+ */
 const HIDDEN: Record<string, string[]> = {
-  users: ['password_hash'],
-  personal_access_tokens: ['token_hash'],
   sessions: ['id'],
+  sso_connections: ['config'],
+  instance_settings: ['value'],
 };
+const SECRET_NAME = /(secret|token|hash|password|totp|recovery|private_key|api_key)/i;
 
-const isHidden = (table: string, column: string) => HIDDEN[table]?.includes(column) ?? false;
+const isHidden = (table: string, column: string) => SECRET_NAME.test(column) || (HIDDEN[table]?.includes(column) ?? false);
 
 /** Cap long cell values so a jsonb blob or a log cannot blow up the response. */
 function clip(v: unknown): unknown {
@@ -147,8 +151,9 @@ const adminRoutes: FastifyPluginAsyncZod = async (app) => {
       const cols = (await columnsByTable()).get(req.params.name);
       if (!cols) throw notFound('No such table');
       const { page, pageSize, q, dir } = req.query;
-      const sortCol = req.query.sort ?? (cols.some((c) => c.name === 'created_at') ? 'created_at' : cols[0]!.name);
-      if (!cols.some((c) => c.name === sortCol)) throw badRequest('Unknown sort column');
+      const sortCol = req.query.sort ?? (cols.some((c) => c.name === 'created_at') ? 'created_at' : (cols.find((c) => !c.hidden) ?? cols[0]!).name);
+      // Sorting by a hidden column would leak the order of secret values; it is refused like an unknown one.
+      if (!cols.some((c) => c.name === sortCol && !c.hidden)) throw badRequest('Unknown sort column');
       const t = sql.identifier(req.params.name);
       // Search matches any visible column's text form.
       const visible = cols.filter((c) => !c.hidden);

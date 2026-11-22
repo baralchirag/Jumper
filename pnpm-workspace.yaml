@@ -10,3 +10,8 @@ allowBuilds:
   cpu-features: false
   # gltf-transform pulls in sharp for textures; KiCad's board models have none, so its native build is not needed.
   sharp: false
+# Security: force patched versions of transitive dependencies (pnpm audit, 2026-11-22).
+overrides:
+  sharp: '>=0.35.5'
+  glob@>=9 <14.0.2: '>=14.0.2'
+  minimatch@>=7 <11.0.1: '>=11.0.1'

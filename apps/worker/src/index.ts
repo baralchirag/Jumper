@@ -8,6 +8,7 @@ import { createStorage } from '@jumper/storage';
 import { Analyzer } from './analyze';
 import { loadEnv } from './env';
 import { log, setLogLevel } from './log';
+import { resolveSandbox } from './kicad-cli';
 
 const env = loadEnv();
 setLogLevel(env.LOG_LEVEL);
@@ -24,6 +25,10 @@ watchRedis(workerRedis, 'queue', (m) => log.error(m), (m) => log.info(m));
 const storage = createStorage();
 await storage.ensureReady();
 
+// Decide how kicad-cli is isolated before any job runs.
+const sandbox = await resolveSandbox(env);
+env.WORKER_SANDBOX = sandbox.mode;
+if (sandbox.note) log.error(sandbox.note);
 const analyzer = new Analyzer({ env, db, redis, storage, kicad: kicadCore() });
 
 /** One BullMQ worker per lane: the fast lane (ERC, DRC, BOM) never waits behind the slow one (renders, exports). */

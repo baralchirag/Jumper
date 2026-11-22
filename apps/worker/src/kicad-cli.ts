@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { lstat, mkdir, mkdtemp, readdir, readlink, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { WorkerEnv } from './env';
 import { buildModelIndex, type ModelIndex } from './models3d';
@@ -66,6 +67,7 @@ export class KicadCli {
         );
       }
       const bin = this.env.KICAD_CLI === 'auto' || this.env.KICAD_CLI === 'host' ? 'kicad-cli' : this.env.KICAD_CLI;
+      if (this.env.WORKER_SANDBOX === 'bwrap') return await run('bwrap', [...(await bwrapArgs(workdir, home, env, [this.env.WORKER_KICAD_3DMODEL_DIR, this.env.WORKER_KICAD_SYMBOL_DIR, this.env.WORKER_KICAD_FOOTPRINT_DIR])), bin, ...args], { env: { PATH: process.env.PATH }, timeoutMs });
       return await run(bin, args, { cwd: workdir, env, timeoutMs });
     } finally {
       await rm(home, { recursive: true, force: true });
@@ -159,4 +161,44 @@ export function describeFailure(r: RunResult): string {
   if (r.timedOut) return 'timed out';
   const msg = (r.stderr || r.stdout).trim().split('\n').slice(-5).join('\n');
   return `exit code ${r.code}${msg ? `: ${msg}` : ''}`;
+}
+
+/**
+ * bubblewrap arguments: new user, network, PID, IPC and UTS namespaces; system files read-only; the job's scratch
+ * directory and a throwaway home read-write; nothing else. Repositories, other jobs, stored outputs, the database
+ * credentials and the server's secret key are not visible, and there is no network to send anything over.
+ */
+async function bwrapArgs(workdir: string, home: string, env: Record<string, string>, extraRo: string[]): Promise<string[]> {
+  const a = ['--unshare-all', '--die-with-parent', '--new-session', '--ro-bind', '/usr', '/usr'];
+  // /bin, /lib… are symlinks into /usr on merged-/usr systems and real directories elsewhere.
+  for (const d of ['/bin', '/sbin', '/lib', '/lib32', '/lib64']) {
+    const st = await lstat(d).catch(() => null);
+    if (!st) continue;
+    if (st.isSymbolicLink()) a.push('--symlink', await readlink(d), d);
+    else a.push('--ro-bind', d, d);
+  }
+  a.push('--ro-bind', '/etc', '/etc', '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp');
+  for (const d of extraRo) if (d && !d.startsWith('/usr/')) a.push('--ro-bind-try', d, d);
+  a.push('--bind', workdir, workdir, '--bind', home, home, '--chdir', workdir, '--clearenv');
+  for (const [k, v] of Object.entries(env)) a.push('--setenv', k, v);
+  a.push('--');
+  return a;
+}
+
+/**
+ * Settle WORKER_SANDBOX=auto: use bubblewrap if it can create its namespaces here (some kernels and Docker's default
+ * seccomp profile forbid that), otherwise run without it. Explicit settings are kept as they are, and an explicit
+ * bwrap that cannot start fails every job instead of quietly running unsandboxed.
+ */
+export async function resolveSandbox(env: WorkerEnv): Promise<{ mode: WorkerEnv['WORKER_SANDBOX']; note?: string }> {
+  if (env.WORKER_SANDBOX !== 'auto') return { mode: env.WORKER_SANDBOX };
+  // Inside a Flatpak sandbox kicad-cli runs on the host through flatpak-spawn; bubblewrap can't wrap that.
+  if (env.hostSpawn) return { mode: 'none', note: 'kicad-cli runs on the host through flatpak-spawn, without a sandbox (development setup).' };
+  // Probe with exactly the arguments real jobs use, so "works here" means kicad-cli will work too.
+  const dir = await mkdtemp(join(env.tmpDir ?? tmpdir(), 'bwrap-probe-')).catch(() => mkdtemp(join(tmpdir(), 'bwrap-probe-')));
+  const probe = await run('bwrap', [...(await bwrapArgs(dir, dir, { PATH: '/usr/bin:/bin' }, [])), 'true'], { env: { PATH: process.env.PATH }, timeoutMs: 10_000 })
+    .catch((e: Error) => ({ code: -1, stderr: e.message }))
+    .finally(() => rm(dir, { recursive: true, force: true }));
+  if (probe.code === 0) return { mode: 'bwrap' };
+  return { mode: 'none', note: `bubblewrap is unavailable (${String(probe.stderr ?? '').trim().slice(0, 160) || 'not installed'}); kicad-cli runs without a sandbox. Install bubblewrap, or set WORKER_SANDBOX=docker.` };
 }

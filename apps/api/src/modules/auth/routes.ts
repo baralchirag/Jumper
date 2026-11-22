@@ -14,6 +14,7 @@ import { findNamespace } from '../repos/access';
 import { audit } from '../audit/audit';
 import { sendVerification } from './verify';
 import type { Ctx } from '../../context';
+import { accountKey, assertNotLocked, clearFailures, loginKey, recordFailure, twoFactorKey } from './guard';
 
 export async function currentUser(ctx: Ctx, user: User): Promise<CurrentUser> {
   const orgs = await ctx.db
@@ -89,6 +90,8 @@ const authRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.post('/login', { ...strict, schema: { body: loginSchema } }, async (req, reply) => {
     const { login, password } = req.body;
+    const key = loginKey(login);
+    await assertNotLocked(ctx, key);
     const rows = await ctx.db
       .select()
       .from(users)
@@ -97,19 +100,31 @@ const authRoutes: FastifyPluginAsyncZod = async (app) => {
     const user = rows[0];
     if (!user) {
       await burnPasswordCheck(password);
+      await recordFailure(ctx, key);
       throw unauthorized('Incorrect username or password');
     }
+    // Also counted per account, so switching between username and email doesn't double the attempts.
+    const acct = accountKey(user.id);
+    await assertNotLocked(ctx, acct);
     if (user.disabled || !(await verifyPassword(user.passwordHash, password))) {
+      await recordFailure(ctx, key);
+      await recordFailure(ctx, acct);
       throw unauthorized('Incorrect username or password');
     }
     if (user.totpEnabledAt) {
       // The password was right; say that a code is needed so the form can ask for it. No session yet.
       if (!req.body.code) throw new HttpError(401, 'two_factor_required', 'Enter the code from your authenticator app');
+      const tfa = twoFactorKey(user.id);
+      await assertNotLocked(ctx, tfa);
       if (!(await checkSecondFactor(ctx, user, req.body.code))) {
+        await recordFailure(ctx, tfa);
         await audit(req, 'user.login.two_factor_failed', { type: 'user', id: user.id }, {}, user.id);
         throw new HttpError(401, 'two_factor_invalid', 'That code is not right. Codes change every 30 seconds; a recovery code works once.');
       }
     }
+    await clearFailures(ctx, key);
+    await clearFailures(ctx, acct);
+    if (user.totpEnabledAt) await clearFailures(ctx, twoFactorKey(user.id));
     await startSession(req, reply, user.id);
     await audit(req, 'user.login', { type: 'user', id: user.id }, {}, user.id);
     return currentUser(ctx, user);
