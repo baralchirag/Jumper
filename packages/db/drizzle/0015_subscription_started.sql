@@ -1,0 +1,1 @@
+ALTER TABLE "namespaces" ADD COLUMN "subscription_started_at" timestamp with time zone;

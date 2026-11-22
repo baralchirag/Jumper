@@ -172,6 +172,8 @@ export const namespaces = pgTable(
     stripeSubscriptionId: text('stripe_subscription_id'),
     /** Stripe subscription status: active, trialing, past_due, unpaid, canceled, incomplete, … */
     subscriptionStatus: text('subscription_status'),
+    /** When the current card subscription started (Stripe's start_date). */
+    subscriptionStartedAt: timestamp('subscription_started_at', { withTimezone: true }),
     /** End of the period already paid for. */
     subscriptionPeriodEnd: timestamp('subscription_period_end', { withTimezone: true }),
     /** The subscription ends at `subscriptionPeriodEnd` instead of renewing. */

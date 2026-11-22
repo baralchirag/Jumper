@@ -85,6 +85,8 @@ const docRoute = createRoute({ getParentRoute: () => rootRoute, path: '/docs/$sl
 const adminRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin', component: AdminOverviewPage });
 const adminUsersRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin/users', component: AdminUsersPage });
 const adminInstanceRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin/instance', component: lazyRouteComponent(() => import('../features/admin/Admin'), 'AdminInstancePage') });
+const adminCustomersRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin/customers', component: lazyRouteComponent(() => import('../features/admin/Customers'), 'AdminCustomersPage') });
+const adminCustomerRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin/customers/$owner', component: lazyRouteComponent(() => import('../features/admin/Customers'), 'AdminCustomerPage') });
 const adminInvoicesRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin/invoices', component: lazyRouteComponent(() => import('../features/admin/Admin'), 'AdminInvoicesPage') });
 type DbSearch = { page?: number; q?: string; sort?: string; dir?: 'asc' | 'desc' };
 const dbSearch = (s: Record<string, unknown>): DbSearch => ({ page: num(s.page), q: str(s.q), sort: str(s.sort), dir: s.dir === 'asc' ? 'asc' : s.dir === 'desc' ? 'desc' : undefined });
@@ -197,6 +199,8 @@ const routeTree = rootRoute.addChildren([
   adminUsersRoute,
   adminInstanceRoute,
   adminInvoicesRoute,
+  adminCustomersRoute,
+  adminCustomerRoute,
   adminDbRoute,
   adminTableRoute,
   ownerRoute,

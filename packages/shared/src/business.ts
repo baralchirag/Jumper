@@ -479,3 +479,73 @@ export interface ScimTokenInfo {
   lastUsedAt: string | null;
   createdAt: string;
 }
+
+// ---------- admin: paying customers ----------
+
+/** How a customer pays: by card (Stripe), by invoice, or a plan assigned by an administrator with nothing billed yet. */
+export type PaymentMethod = 'card' | 'invoice' | 'assigned';
+
+export interface AdminCustomerRow {
+  owner: string;
+  kind: 'user' | 'org';
+  /** Display name: the person's name or the organization's. */
+  name: string | null;
+  avatarUrl: string | null;
+  /** The person, or the organization's owners, to contact about billing. */
+  contactEmails: string[];
+  plan: PlanId;
+  cycle: BillingCycle;
+  method: PaymentMethod;
+  /** Stripe subscription status when paying by card. */
+  status: string | null;
+  /** When the subscription (or the first paid invoice) started. */
+  startedAt: string | null;
+  /** Paid until. */
+  paidThrough: string | null;
+  cancelAtPeriodEnd: boolean;
+  seats: number;
+  /** Recurring revenue at list price, per month (annual plans divided by 12), in cents. */
+  mrrCents: number;
+  totalPaidCents: number;
+  invoicesPaid: number;
+  lastPaymentAt: string | null;
+  lastPaymentCents: number | null;
+  /** Open (unpaid) invoices and their total. */
+  openCents: number;
+  createdAt: string;
+}
+
+export interface AdminCustomers {
+  rows: AdminCustomerRow[];
+  totals: { paying: number; mrrCents: number; arrCents: number; collectedCents: number; openCents: number; pastDue: number; cancelling: number };
+  /** True when the server has Stripe keys; links to the Stripe dashboard are then shown. */
+  stripe: boolean;
+}
+
+export interface AdminCustomerDetail extends AdminCustomerRow {
+  profile: {
+    username?: string;
+    email?: string;
+    emailVerified?: boolean;
+    bio?: string | null;
+    company?: string | null;
+    location?: string | null;
+    website?: string | null;
+    twoFactor?: boolean;
+    disabled?: boolean;
+    lastSignInAt?: string | null;
+    description?: string | null;
+  };
+  billingProfile: BillingProfile;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  /** Link to the customer in the Stripe dashboard (test or live, from the key). */
+  stripeDashboardUrl: string | null;
+  members: { username: string; name: string | null; email: string; role: string }[];
+  repositories: number;
+  storageBytes: number;
+  checkMinutes: number;
+  invoices: InvoiceInfo[];
+  /** Billing events from the security log: checkouts, plan changes, cancellations, invoices raised. */
+  events: { at: string; action: string; actor: string | null; detail: Record<string, unknown> }[];
+}

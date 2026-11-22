@@ -2,7 +2,7 @@ import { InstanceAdmin, InvoicesAdmin } from './Instance';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Database, EyeOff, LayoutDashboard, Search, Table2, Users, Receipt, Server } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, CreditCard, Database, EyeOff, LayoutDashboard, Search, Table2, Users, Receipt, Server } from 'lucide-react';
 import type { AdminOverview, AdminTableInfo, AdminTablePage, UserSummary } from '@jumper/shared';
 import { Avatar, Button, Input, Label, PageSpinner, RelativeTime, cx } from '@jumper/ui';
 import { ErrorView, NotFound, PageContainer, formatBytes } from '../../shared/components/common';
@@ -10,9 +10,9 @@ import { api, errorMessage } from '../../shared/lib/api';
 import { useMe } from '../../shared/lib/queries';
 import { auditText } from '../settings/Settings';
 
-type AdminSection = 'overview' | 'users' | 'database' | 'instance' | 'invoices';
+export type AdminSection = 'overview' | 'users' | 'customers' | 'database' | 'instance' | 'invoices';
 
-function AdminLayout({ section, children, wide }: { section: AdminSection; children: ReactNode; wide?: boolean }) {
+export function AdminLayout({ section, children, wide }: { section: AdminSection; children: ReactNode; wide?: boolean }) {
   const { pathname } = useLocation();
   const { data: me, isLoading } = useMe();
   if (isLoading) return <PageSpinner />;
@@ -21,6 +21,7 @@ function AdminLayout({ section, children, wide }: { section: AdminSection; child
   const items = [
     { id: 'overview', to: '/admin', label: 'Overview', icon: <LayoutDashboard size={14} /> },
     { id: 'users', to: '/admin/users', label: 'Users', icon: <Users size={14} /> },
+    { id: 'customers', to: '/admin/customers', label: 'Customers', icon: <CreditCard size={14} /> },
     { id: 'database', to: '/admin/database', label: 'Database', icon: <Database size={14} /> },
     { id: 'instance', to: '/admin/instance', label: 'Instance', icon: <Server size={14} /> },
     { id: 'invoices', to: '/admin/invoices', label: 'Invoices', icon: <Receipt size={14} /> },

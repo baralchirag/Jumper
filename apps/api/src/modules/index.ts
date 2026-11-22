@@ -55,6 +55,7 @@ import scimRoutes from './scim/routes';
 import policyRoutes from './policy/routes';
 import { billingAdminRoutes, billingRoutes } from './billing/routes';
 import { stripeRoutes, stripeWebhookRoutes } from './stripe/routes';
+import { customerAdminRoutes } from './billing/customers';
 import instanceRoutes, { versionRoutes } from './instance/routes';
 import twoFactorRoutes from './auth/two-factor';
 import referralRoutes from './referrals/routes';
@@ -94,6 +95,7 @@ export async function registerModules(app: FastifyInstance): Promise<void> {
   await app.register(policyRoutes, { prefix: '/api' });
   await app.register(billingRoutes, { prefix: '/api' });
   await app.register(billingAdminRoutes, { prefix: '/api/admin' });
+  await app.register(customerAdminRoutes, { prefix: '/api/admin' });
   await app.register(stripeRoutes, { prefix: '/api' });
   await app.register(stripeWebhookRoutes, { prefix: '/api' });
   await app.register(instanceRoutes, { prefix: '/api/admin/instance' });

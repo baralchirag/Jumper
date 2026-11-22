@@ -299,6 +299,7 @@ export async function applySubscription(ctx: Ctx, sub: Stripe.Subscription): Pro
     stripeCustomerId: typeof sub.customer === 'string' ? sub.customer : sub.customer.id,
     stripeSubscriptionId: sub.id,
     subscriptionStatus: sub.status,
+    subscriptionStartedAt: ts(sub.start_date),
     subscriptionPeriodEnd: periodEnd,
     subscriptionCancelAtPeriodEnd: sub.cancel_at_period_end,
   };

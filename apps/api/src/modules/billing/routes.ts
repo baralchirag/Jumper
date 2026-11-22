@@ -23,7 +23,7 @@ export function profileOf(ns: Pick<Namespace, 'billing'>): BillingProfile {
   return parsed.success ? parsed.data : billingProfileSchema.parse({});
 }
 
-function toInvoice(ctx: Ctx, inv: Invoice, owner: string): InvoiceInfo {
+export function toInvoice(ctx: Ctx, inv: Invoice, owner: string): InvoiceInfo {
   return {
     id: inv.id,
     number: inv.number,

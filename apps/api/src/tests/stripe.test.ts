@@ -267,6 +267,35 @@ describe.skipIf(!dbAvailable)('card payments with Stripe', () => {
     expect((await ns('alice')).plan).toBe('free');
   });
 
+  it('shows administrators who pays, how, since when and how much', async () => {
+    const alice = await h.user('alice');
+    const root = await h.user('root');
+    await h.ctx.db.execute(sql`update users set is_admin = true where username = 'root'`);
+    await alice.post('/api/owners/alice/billing/checkout', { plan: 'pro', cycle: 'annual' });
+    const a = await ns('alice');
+    const sub = stripe.subscribe(a.stripe_customer_id, a.id, 'jumper_pro_annual');
+    (sub as any).start_date = Math.floor(Date.parse('2026-11-01T00:00:00Z') / 1000);
+    await webhook('customer.subscription.created', sub);
+    const now = Math.floor(Date.now() / 1000);
+    await webhook('invoice.paid', { id: 'in_a1', object: 'invoice', number: 'JMPR-0101', status: 'paid', customer: a.stripe_customer_id, total: 12_000, subtotal: 12_000, created: now, status_transitions: { paid_at: now }, lines: { object: 'list', data: [] } });
+
+    expect((await alice.get('/api/admin/customers')).status).toBe(403);
+    const list = await root.get('/api/admin/customers');
+    expect(list.status, list.body).toBe(200);
+    const r = list.json.rows.find((x: { owner: string }) => x.owner === 'alice');
+    expect(r).toMatchObject({ plan: 'pro', cycle: 'annual', method: 'card', status: 'active', seats: 1, mrrCents: 1000, totalPaidCents: 12_000, invoicesPaid: 1, lastPaymentCents: 12_000, startedAt: '2026-11-01T00:00:00.000Z' });
+    expect(r.contactEmails).toEqual(['alice@example.com']);
+    expect(list.json.totals).toMatchObject({ paying: 1, mrrCents: 1000, arrCents: 12_000, collectedCents: 12_000 });
+
+    const d = await root.get('/api/admin/customers/alice');
+    expect(d.status, d.body).toBe(200);
+    expect(d.json.profile.username).toBe('alice');
+    expect(d.json.invoices[0]).toMatchObject({ number: 'JMPR-0101', source: 'stripe' });
+    expect(d.json.members[0]).toMatchObject({ username: 'alice', role: 'owner' });
+    expect(d.json.stripeDashboardUrl).toBe(`https://dashboard.stripe.com/test/customers/${a.stripe_customer_id}`);
+    expect(d.json.events.map((e: { action: string }) => e.action)).toContain('billing.checkout');
+  });
+
   it('only owners can start billing, and members of an organization cannot', async () => {
     const alice = await h.user('alice');
     const bob = await h.user('bob');
