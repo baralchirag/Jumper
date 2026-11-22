@@ -172,7 +172,7 @@ export function OrgSettingsPage() {
       {isOwner && section === 'policies' && <PolicyPanel owner={ns.slug} />}
       {isOwner && section === 'sso' && <SsoPanel owner={ns.slug} />}
       {isOwner && section === 'audit' && <AuditPanel owner={ns.slug} />}
-      {isOwner && section === 'billing' && <BillingPanel owner={ns.slug} />}
+      {isOwner && section === 'billing' && <BillingPanel owner={ns.slug} isOrg />}
 
       {section === 'general' && <>
       {isOwner && (

@@ -11,6 +11,7 @@ import { SCIM_TOKEN_PREFIX } from '../instance/routes';
 import { hasFeature } from '../license/license';
 import { findNamespace } from '../repos/access';
 import { assertOrgSeat } from '../usage/service';
+import { seatsChanged } from '../stripe/service';
 
 const USER_SCHEMA = 'urn:ietf:params:scim:schemas:core:2.0:User';
 const GROUP_SCHEMA = 'urn:ietf:params:scim:schemas:core:2.0:Group';
@@ -299,6 +300,7 @@ const scimRoutes: FastifyPluginAsync = async (app) => {
       throw new ScimError(409, e.message);
     });
     await ctx.db.insert(orgMembers).values({ orgId: g.org.id, userId: u.id, role: 'member' }).onConflictDoNothing();
+    seatsChanged(ctx, { orgId: g.org.id });
   };
 
   const removeMember = async (g: Awaited<ReturnType<typeof findGroup>>, userId: string) => {
@@ -306,6 +308,7 @@ const scimRoutes: FastifyPluginAsync = async (app) => {
     // The directory never removes the last owner: an organization nobody can run helps no one.
     if (owners.length === 1 && owners[0]!.userId === userId) return;
     await ctx.db.delete(orgMembers).where(and(eq(orgMembers.orgId, g.org.id), eq(orgMembers.userId, userId)));
+    seatsChanged(ctx, { orgId: g.org.id });
   };
 
   app.patch('/Groups/:id', async (req, reply) => {

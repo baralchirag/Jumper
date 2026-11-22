@@ -34,6 +34,7 @@ import { enqueueAnalysis } from './push';
 import { assertCollaboratorSeat } from '../usage/service';
 import { toRepoInfo, toUserSummary } from './serialize';
 import type { Ctx } from '../../context';
+import { seatsChanged } from '../stripe/service';
 
 /** Write a path → content map as a git tree (folders included) and return its id. */
 async function writeTree(git: GitRepo, files: Record<string, string>): Promise<string> {
@@ -369,6 +370,7 @@ const repoRoutes: FastifyPluginAsyncZod = async (app) => {
         .insert(repoCollaborators)
         .values({ repoId: r.repo.id, userId: target.id, ...grant })
         .onConflictDoUpdate({ target: [repoCollaborators.repoId, repoCollaborators.userId], set: grant });
+      seatsChanged(ctx, { namespaceId: r.repo.namespaceId });
       await audit(req, 'repo.collaborator.set', { type: 'repo', id: r.repo.id }, { user: target.username, role: req.body.role });
       return { ok: true };
     },
@@ -382,6 +384,7 @@ const repoRoutes: FastifyPluginAsyncZod = async (app) => {
       const target = (await ctx.db.select().from(users).where(sql`lower(${users.username}) = lower(${req.params.username})`).limit(1))[0];
       if (!target) throw notFound('User not found');
       await ctx.db.delete(repoCollaborators).where(and(eq(repoCollaborators.repoId, r.repo.id), eq(repoCollaborators.userId, target.id)));
+      seatsChanged(ctx, { namespaceId: r.repo.namespaceId });
       await audit(req, 'repo.collaborator.remove', { type: 'repo', id: r.repo.id }, { user: target.username });
       return { ok: true };
     },

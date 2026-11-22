@@ -10,6 +10,7 @@ import { purgeRepoData } from '../repos/purge';
 import { assertOrgSeat } from '../usage/service';
 import { resolveRoleRef } from '../roles/service';
 import { assertNamespaceNotHeld } from '../legal/holds';
+import { seatsChanged } from '../stripe/service';
 
 const orgRoutes: FastifyPluginAsyncZod = async (app) => {
   const ctx = app.ctx;
@@ -59,6 +60,7 @@ const orgRoutes: FastifyPluginAsyncZod = async (app) => {
         .insert(orgMembers)
         .values({ orgId, userId: target.id, role: req.body.role, ...roleCols })
         .onConflictDoUpdate({ target: [orgMembers.orgId, orgMembers.userId], set: { role: req.body.role, ...roleCols } });
+      seatsChanged(ctx, { orgId });
       await audit(req, 'org.member.set', { type: 'org', id: orgId }, { user: target.username, role: req.body.role });
       return { ok: true };
     },
@@ -81,6 +83,7 @@ const orgRoutes: FastifyPluginAsyncZod = async (app) => {
         .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.role, 'owner')));
       if (owners.length === 1 && owners[0]!.userId === target.id) throw conflict('An organization needs at least one owner');
       await ctx.db.delete(orgMembers).where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, target.id)));
+      seatsChanged(ctx, { orgId });
       await audit(req, 'org.member.remove', { type: 'org', id: orgId }, { user: target.username });
       return { ok: true };
     },

@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate } from '@tanstack/react-router';
 import { Check, Minus, Plus } from 'lucide-react';
 import { DEFAULT_PLANS, FEATURE_LABELS, FREE_TRIAL_DAYS_DEFAULT, REFERRAL_BONUS_DAYS_DEFAULT, planFeatures, type BillingCycle, type Feature, type Plan, type PlanId } from '@jumper/shared';
 import { SegmentedControl, buttonClass, cx } from '@jumper/ui';
 import { PageContainer } from '../../shared/components/common';
 import { useMe } from '../../shared/lib/queries';
+import { api } from '../../shared/lib/api';
 import { isPaidPlan } from '../../shared/components/PlanBadge';
 
 /** What every plan does. Plans differ only in how much you can store and run, and in team admin. */
@@ -47,19 +49,23 @@ const FAQ = [
   { q: 'Do you charge per repository or per board?', a: 'No. Repositories and boards are unlimited on every plan.' },
   { q: 'Can I get more trial storage?', a: `Yes. Each person who signs up with your invite link adds 1 GB for ${REFERRAL_BONUS_DAYS_DEFAULT} days.` },
   { q: 'Monthly or yearly?', a: 'Yearly costs the same as ten months. You can switch between them.' },
-  { q: 'How do I pay?', a: 'Card payment isn’t open yet. Until it is, we switch your plan on by hand and send an invoice.' },
 ];
+
+const PAY_CARD = { q: 'How do I pay?', a: 'By card, through Stripe. Seats are billed for the people with access and prorated when that changes. Cancel any time: you keep the plan until the end of the period you paid for. Enterprise can pay by invoice.' };
+const PAY_INVOICE = { q: 'How do I pay?', a: 'We switch your plan on and send an invoice.' };
 
 export function PricingPage() {
   const { data: me } = useMe();
   const [cycle, setCycle] = useState<BillingCycle>('annual');
+  const plansQ = useQuery({ queryKey: ['plans'], queryFn: () => api.get<{ cardPayments: boolean }>('/plans'), staleTime: 5 * 60_000 });
+  const faq = [...FAQ, plansQ.data?.cardPayments ? PAY_CARD : PAY_INVOICE];
   const firstOrg = me?.orgs.find((o) => o.role === 'owner');
 
-  const cta = (id: PlanId): { label: string; to: string; params?: Record<string, string>; primary: boolean } => {
+  const cta = (id: PlanId): { label: string; to: string; params?: Record<string, string>; search?: Record<string, string>; primary: boolean } => {
     if (!me) return { label: id === 'free' ? 'Start the trial' : id === 'enterprise' ? 'Contact us' : `Get ${DEFAULT_PLANS[id].name}`, to: '/signup', primary: id === 'pro' };
-    if (id === 'free' || id === 'pro') return id === 'free' ? { label: 'See your trial', to: '/settings/$section', params: { section: 'usage' }, primary: false } : { label: 'Get Pro', to: '/settings/$section', params: { section: 'usage' }, primary: true };
+    if (id === 'free' || id === 'pro') return id === 'free' ? { label: 'See your trial', to: '/settings/$section', params: { section: 'usage' }, primary: false } : { label: 'Get Pro', to: '/settings/$section', params: { section: 'usage' }, search: { plan: 'pro', cycle }, primary: true };
     if (!firstOrg) return { label: 'Create an organization', to: '/organizations/new', primary: false };
-    return { label: id === 'enterprise' ? 'Contact us' : 'Upgrade organization', to: '/organizations/$org/settings/$section', params: { org: firstOrg.slug, section: 'billing' }, primary: false };
+    return { label: id === 'enterprise' ? 'Contact us' : 'Upgrade organization', to: '/organizations/$org/settings/$section', params: { org: firstOrg.slug, section: 'billing' }, search: id === 'team' ? { plan: 'team', cycle } : undefined, primary: false };
   };
 
   // Someone already paying has no use for the sales page: send them to their plan instead.
@@ -103,7 +109,7 @@ export function PricingPage() {
               <p className="mt-1.5 min-h-[2.8em] text-[14px] leading-snug text-fg-muted">{FOR[id]}</p>
               <p className="mt-6 font-title text-[2.5rem] font-medium leading-none tracking-[-0.035em] tabular-nums">{p.amount}</p>
               <p className="mt-2 min-h-[2.6em] text-[13px] leading-snug text-fg-muted">{p.unit}</p>
-              <Link to={c.to} params={c.params as never} className={buttonClass(c.primary ? 'accent' : 'default', 'md', 'mt-4 w-full')}>
+              <Link to={c.to} params={c.params as never} search={c.search as never} className={buttonClass(c.primary ? 'accent' : 'default', 'md', 'mt-4 w-full')}>
                 {c.label}
               </Link>
               <dl className="mt-6 grid grid-cols-[1fr_auto] gap-y-2 text-[14px]">
@@ -198,7 +204,7 @@ export function PricingPage() {
       <section aria-labelledby="faq-h" className="mt-14 grid gap-8 border-t border-border pt-10 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
         <h2 id="faq-h" className="text-lg font-medium">Questions</h2>
         <div className="divide-y divide-border-muted border-y border-border">
-          {FAQ.map((f) => (
+          {faq.map((f) => (
             <details key={f.q} className="group py-4">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-[15px] font-medium">
                 {f.q}

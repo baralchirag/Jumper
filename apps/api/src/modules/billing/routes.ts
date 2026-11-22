@@ -1,5 +1,7 @@
-// Invoice billing. Plans are assigned by an administrator and paid by invoice: the owner keeps billing details and a
-// billing cycle (monthly or annual), an administrator raises invoices and marks them paid. There is no card payment.
+// Billing. Two ways to pay, shown in one invoice list:
+//  - by card through Stripe (modules/stripe): checkout, subscription, Stripe invoices mirrored here;
+//  - by invoice: an administrator assigns the plan, raises invoices and marks them paid (Enterprise, or instances
+//    without Stripe keys).
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { and, desc, eq, invoices, namespaces, sql, type Invoice, type Namespace } from '@jumper/db';
@@ -12,6 +14,7 @@ import { requireScope, requireUser } from '../auth/plugin';
 import { loadOwner } from '../policy/routes';
 import { findNamespace } from '../repos/access';
 import { planFor, usageFor } from '../usage/service';
+import { cardPaymentsEnabled, subscriptionInfo } from '../stripe/service';
 
 const ownerParams = z.object({ owner: z.string().max(100) });
 
@@ -40,6 +43,9 @@ function toInvoice(ctx: Ctx, inv: Invoice, owner: string): InvoiceInfo {
     notes: inv.notes,
     billTo: billingProfileSchema.parse(inv.billTo),
     from: { name: ctx.env.OPERATOR_NAME ?? null, email: ctx.env.OPERATOR_EMAIL ?? null },
+    source: inv.stripeInvoiceId ? 'stripe' : 'manual',
+    hostedUrl: inv.hostedUrl,
+    pdfUrl: inv.pdfUrl,
   };
 }
 
@@ -57,7 +63,19 @@ async function billingInfo(ctx: Ctx, ns: Namespace): Promise<BillingInfo> {
     cycle: profile.cycle,
     // Drafts are the administrator's working copies; the owner sees an invoice once it is issued.
     invoices: rows.filter((r) => r.status !== 'draft').map((r) => toInvoice(ctx, r, ns.slug)),
+    cardPayments: cardPaymentsEnabled(ctx),
+    subscription: (() => {
+      const sub = subscriptionInfo(ns);
+      return sub ? { ...sub, quantity: Math.max(1, usage.seats) } : null;
+    })(),
   };
+}
+
+/** Billing info read fresh from the database (after Stripe calls have updated the namespace). */
+export async function billingInfoFor(ctx: Ctx, namespaceId: string): Promise<BillingInfo> {
+  const [ns] = await ctx.db.select().from(namespaces).where(eq(namespaces.id, namespaceId)).limit(1);
+  if (!ns) throw notFound('Owner not found');
+  return billingInfo(ctx, ns);
 }
 
 /** INV-2026-0042: the next free number in the year. The unique index settles races; the caller retries. */

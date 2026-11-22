@@ -40,6 +40,14 @@ const envSchema = z.object({
   SCHEDULER_ENABLED: z.stringbool().default(true),
   /** Security-log entries older than this are deleted. */
   AUDIT_RETENTION_DAYS: z.coerce.number().int().min(1).default(365),
+  /** Card payments with Stripe. Both keys are needed; without them plans are assigned by hand and invoiced. */
+  STRIPE_SECRET_KEY: z.string().startsWith('sk_').or(z.string().startsWith('rk_')).optional(),
+  /** Signing secret of the webhook endpoint at /api/stripe/webhook (whsec_…). */
+  STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_').optional(),
+  /** Let Stripe Tax calculate sales tax / VAT at checkout. Needs Stripe Tax set up in the Stripe dashboard. */
+  STRIPE_AUTOMATIC_TAX: z.stringbool().default(false),
+  /** Tests only: send Stripe API calls to this base URL (a fake server) instead of api.stripe.com. */
+  STRIPE_API_BASE: z.url().optional(),
   /** Enforce plan limits (storage, check minutes, seats). Off by default: self-hosted instances are unlimited. */
   PLANS_ENFORCED: z.stringbool().default(false),
   /** Serve the interactive OpenAPI explorer at /api/docs. Off by default: it lists every endpoint, internal ones included. */

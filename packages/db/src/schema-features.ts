@@ -542,10 +542,22 @@ export const invoices = pgTable(
     /** Billing details copied at issue time, so later edits do not change old invoices. */
     billTo: jsonb('bill_to').$type<Record<string, string>>().notNull().default({}),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    /** Set for invoices raised by Stripe for a card subscription (mirrored from webhooks). */
+    stripeInvoiceId: text('stripe_invoice_id'),
+    /** Stripe's hosted page for paying or viewing the invoice, and its PDF. */
+    hostedUrl: text('hosted_url'),
+    pdfUrl: text('pdf_url'),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex('invoices_number_idx').on(t.number), index('invoices_ns_idx').on(t.namespaceId, t.createdAt)],
+  (t) => [uniqueIndex('invoices_number_idx').on(t.number), index('invoices_ns_idx').on(t.namespaceId, t.createdAt), uniqueIndex('invoices_stripe_idx').on(t.stripeInvoiceId)],
 );
+
+/** Stripe webhook events already applied, so a redelivered event is not applied twice. */
+export const stripeEvents = pgTable('stripe_events', {
+  id: text('id').primaryKey(),
+  type: text('type').notNull(),
+  createdAt: createdAt(),
+});
 
 // ---------- stock and end-of-life alerts ----------
 

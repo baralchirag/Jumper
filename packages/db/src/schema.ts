@@ -166,6 +166,16 @@ export const namespaces = pgTable(
     plan: text('plan').notNull().default('free'),
     /** Billing cycle and invoice details (BillingProfile from @jumper/shared). */
     billing: jsonb('billing').$type<Record<string, string>>().notNull().default({}),
+    /** Stripe customer for card payments (created on first checkout). */
+    stripeCustomerId: text('stripe_customer_id'),
+    /** The Stripe subscription that sets `plan` while it is active; null when the plan is assigned by hand. */
+    stripeSubscriptionId: text('stripe_subscription_id'),
+    /** Stripe subscription status: active, trialing, past_due, unpaid, canceled, incomplete, … */
+    subscriptionStatus: text('subscription_status'),
+    /** End of the period already paid for. */
+    subscriptionPeriodEnd: timestamp('subscription_period_end', { withTimezone: true }),
+    /** The subscription ends at `subscriptionPeriodEnd` instead of renewing. */
+    subscriptionCancelAtPeriodEnd: boolean('subscription_cancel_at_period_end').notNull().default(false),
     /** Repositories shown first on the profile, in order (a portfolio). */
     pinnedRepoIds: uuid('pinned_repo_ids').array().notNull().default(sql`'{}'::uuid[]`),
     createdAt: createdAt(),
@@ -174,6 +184,7 @@ export const namespaces = pgTable(
     uniqueIndex('namespaces_slug_lower_idx').on(sql`lower(${t.slug})`),
     uniqueIndex('namespaces_user_idx').on(t.userId),
     uniqueIndex('namespaces_org_idx').on(t.orgId),
+    uniqueIndex('namespaces_stripe_customer_idx').on(t.stripeCustomerId),
   ],
 );
 

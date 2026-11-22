@@ -45,6 +45,7 @@ import {
 import { UnavailableNotice, isUnavailable } from '../../shared/components/common';
 import { api, errorMessage } from '../../shared/lib/api';
 import { PlanBadge } from '../../shared/components/PlanBadge';
+import { CardBilling } from './CardBilling';
 
 const enc = encodeURIComponent;
 
@@ -1021,7 +1022,7 @@ const INVOICE_LABEL: Record<InvoiceInfo['status'], string> = {
 };
 
 /** Plan summary, the details printed on invoices, and the invoices issued so far. */
-export function BillingPanel({ owner }: { owner: string }) {
+export function BillingPanel({ owner, isOrg = false }: { owner: string; isOrg?: boolean }) {
   const qc = useQueryClient();
   const key = ['billing', owner];
   const q = useQuery({
@@ -1065,7 +1066,9 @@ export function BillingPanel({ owner }: { owner: string }) {
   return (
     <section className="space-y-6">
       <SectionTitle title="Billing">
-        Plans are paid by invoice. What you enter here is printed on every invoice we send.
+        {b.cardPayments
+          ? 'Pay by card through Stripe, or by invoice for Enterprise. Receipts and invoices for both are listed below.'
+          : 'Plans are paid by invoice. What you enter here is printed on every invoice we send.'}
       </SectionTitle>
 
       {/* Plan summary */}
@@ -1109,6 +1112,8 @@ export function BillingPanel({ owner }: { owner: string }) {
         </div>
       </Box>
 
+      {b.cardPayments && b.plan !== 'enterprise' && <CardBilling owner={owner} billing={b} queryKey={key} isOrg={isOrg} />}
+
       {/* Billing details */}
       <form
         noValidate
@@ -1126,6 +1131,7 @@ export function BillingPanel({ owner }: { owner: string }) {
           </BoxHeader>
           <div className="grid gap-x-6 gap-y-5 p-5 xl:grid-cols-[minmax(0,1fr)_15rem]">
             <div className="space-y-5">
+              {!b.subscription && (
               <fieldset>
                 <legend className="mb-2 block text-sm font-medium text-fg">Billing cycle</legend>
                 <div role="radiogroup" className="grid gap-2 sm:grid-cols-2">
@@ -1177,6 +1183,7 @@ export function BillingPanel({ owner }: { owner: string }) {
                   })}
                 </div>
               </fieldset>
+              )}
 
               <div className="grid gap-5 sm:grid-cols-2">
                 <FormField
@@ -1360,13 +1367,25 @@ export function BillingPanel({ owner }: { owner: string }) {
                     className="border-b border-border-muted transition-colors last:border-0 hover:bg-canvas-subtle"
                   >
                     <td className="px-5 py-3">
-                      <Link
-                        to="/billing/$owner/invoices/$id"
-                        params={{ owner, id: i.id }}
-                        className="link font-mono"
-                      >
-                        {i.number}
-                      </Link>
+                      {i.source === 'stripe' && i.hostedUrl ? (
+                        <a href={i.hostedUrl} target="_blank" rel="noreferrer" className="link font-mono">
+                          {i.number}
+                        </a>
+                      ) : (
+                        <Link
+                          to="/billing/$owner/invoices/$id"
+                          params={{ owner, id: i.id }}
+                          className="link font-mono"
+                        >
+                          {i.number}
+                        </Link>
+                      )}
+                      {i.source === 'stripe' && <span className="ml-2 text-xs text-fg-subtle">card</span>}
+                      {i.pdfUrl && (
+                        <a href={i.pdfUrl} target="_blank" rel="noreferrer" className="ml-2 text-xs text-fg-muted hover:text-fg">
+                          PDF
+                        </a>
+                      )}
                       {i.issuedAt && (
                         <p className="mt-0.5 text-xs text-fg-subtle">
                           Issued {shortDate(i.issuedAt)}

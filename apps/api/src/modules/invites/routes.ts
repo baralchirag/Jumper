@@ -11,6 +11,7 @@ import { findNamespace, orgRoleFor } from '../repos/access';
 import { assertOrgSeat } from '../usage/service';
 import { audit } from '../audit/audit';
 import { sendMail } from '../mail/mailer';
+import { seatsChanged } from '../stripe/service';
 
 const TTL_DAYS = 7;
 const token = z.object({ token: z.string().min(20).max(200) });
@@ -119,6 +120,7 @@ const inviteRoutes: FastifyPluginAsyncZod = async (app) => {
       .returning({ id: orgInvites.id });
     if (!claimed.length) throw notFound('This invite link has just been used. Ask for a new one.');
     await ctx.db.insert(orgMembers).values({ orgId: org.id, userId: user.id, role: invite.role, repoRole: invite.repoRole }).onConflictDoNothing();
+    seatsChanged(ctx, { orgId: org.id });
     await audit(req, 'org.invite.accept', { type: 'org', id: org.id }, { user: user.username, role: invite.role });
     return { org: orgNs.slug };
   });

@@ -295,6 +295,31 @@ export interface InvoiceInfo {
   billTo: BillingProfile;
   /** Who issued it (the operator of this instance). */
   from: { name: string | null; email: string | null };
+  /** Card invoices come from Stripe and have Stripe's own page and PDF; manual ones are printed from this site. */
+  source: 'manual' | 'stripe';
+  hostedUrl: string | null;
+  pdfUrl: string | null;
+}
+
+/** Plans that can be bought by card. Free needs no payment; Enterprise is quoted. */
+export const CARD_PLANS = ['pro', 'team'] as const;
+export type CardPlanId = (typeof CARD_PLANS)[number];
+
+export const checkoutSchema = z.object({
+  plan: z.enum(CARD_PLANS),
+  cycle: z.enum(BILLING_CYCLES),
+});
+
+export interface SubscriptionInfo {
+  /** Stripe's status: active, trialing, past_due, unpaid, canceled, incomplete, incomplete_expired, paused. */
+  status: string;
+  plan: PlanId;
+  cycle: BillingCycle;
+  /** Seats being billed (Stripe quantity). */
+  quantity: number;
+  /** End of the period already paid for (ISO). */
+  periodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
 }
 
 export interface BillingInfo {
@@ -306,6 +331,10 @@ export interface BillingInfo {
   nextPeriodCents: number | null;
   cycle: BillingCycle;
   invoices: InvoiceInfo[];
+  /** Card payments are available on this instance. */
+  cardPayments: boolean;
+  /** The card subscription, when this owner pays by card. */
+  subscription: SubscriptionInfo | null;
 }
 
 // ---------- stock and end-of-life alerts ----------

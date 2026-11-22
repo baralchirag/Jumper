@@ -18,6 +18,7 @@ import { assertOrgSeat } from '../usage/service';
 import { authorizeUrl, exchangeCode, pkcePair, type OidcConfig } from './oidc';
 import { builtinConfig, callbackUrl, connectionForEmail, isBuiltin, oidcConfig, toConnectionInfo } from './providers';
 import { normalizeCertificate, samlIdentity, samlMetadata, samlRedirectUrl } from './saml';
+import { seatsChanged } from '../stripe/service';
 
 const STATE_COOKIE = 'sso_state';
 const STATE_TTL_MS = 10 * 60_000;
@@ -110,6 +111,7 @@ export async function resolveIdentity(ctx: Ctx, id: Identity, conn: SsoConnectio
   if (ns?.orgId) {
     await assertOrgSeat(ctx, ns, user.id);
     await ctx.db.insert(orgMembers).values({ orgId: ns.orgId, userId: user.id, role: 'member' }).onConflictDoNothing();
+    seatsChanged(ctx, { orgId: ns.orgId });
   }
   return link(user);
 }
