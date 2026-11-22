@@ -1,19 +1,19 @@
 # Badges and board previews
 
-Show a board's status where people already look: the README on Jumper or GitHub, a project website, a wiki. Open a repository and choose **Embed** next to the **Code** button for ready-to-paste snippets.
+You can show a board's check status or a picture of it in a README or on a website. Open a repository and click **Embed** next to **Code** to copy a snippet.
 
-## Check badges
+## Check badge
 
 ```markdown
 [![Checks](https://jumper.example.com/api/repos/acme/power-board/badge.svg)](https://jumper.example.com/acme/power-board/checks)
 ```
 
-| URL | Shows |
-| --- | --- |
-| `…/badge.svg` | All checks on the latest commit: *passing*, *failing*, *running* or *warnings* |
-| `…/badge.svg?check=DRC` | One check: `ERC`, `DRC`, `BOM`, `Render` or `Exports` |
-| `…/badge.svg?branch=dev` | Another branch (default: the repository's default branch) |
-| `…/badge.svg?label=rules` | Your own text on the left |
+| URL                         | Shows                                         |
+| --------------------------- | --------------------------------------------- |
+| `…/badge.svg`               | All checks on the latest commit               |
+| `…/badge.svg?check=DRC`     | One check: `ERC`, `DRC`, `BOM`, `Render` or `Exports` |
+| `…/badge.svg?branch=dev`    | Another branch                                |
+| `…/badge.svg?label=rules`   | Your own label                                |
 
 ## Board preview
 
@@ -21,16 +21,14 @@ Show a board's status where people already look: the README on Jumper or GitHub,
 ![Power board](https://jumper.example.com/api/repos/acme/power-board/preview.png)
 ```
 
-The picture comes from the checks on the newest commit that has one, so it updates on its own after each push. Choose the view with `?view=`:
+The picture updates after each push. Pick the view with `?view=`:
 
-- `iso` (default): a ray-traced 3D render at an angle
-- `top` / `bottom`: straight-on 3D renders of each side
-- `drawing`: the layout drawing (SVG), as on the repository page
+- `iso` (default): 3D render at an angle
+- `top` or `bottom`: 3D render of one side
+- `drawing`: the layout drawing
 
-If 3D renders are turned off in [`.jumper.yml`](/docs/jumper-yml), the preview falls back to the drawing.
+If 3D renders are turned off, the preview uses the drawing.
 
 ## Private repositories
 
-Badges and previews of private repositories load only for people signed in to Jumper who can read the repository, for example in the repository's own README. Elsewhere they return *not found*: they never reveal anything about a private repository.
-
-For downloads rather than pictures, use the commit's **Outputs** page.
+Badges and previews of private repositories only load for signed-in people who can read the repository. Everyone else gets *not found*.

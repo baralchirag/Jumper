@@ -1,37 +1,49 @@
 # Design analysis
 
-## Board statistics & fab check
+## Fab check
 
-Open a `.kicad_pcb` and choose the **Fab check** tab. Jumper measures the board directly from the file:
+Open a `.kicad_pcb` file and click the **Fab check** tab. Jumper reads the board and shows:
 
-* size, copper layer count and thickness
-* component, pad, net, via and zone counts
-* narrowest track, smallest via, smallest hole and smallest annular ring
-* total routed length and component density
+- size, layer count and thickness
+- number of parts, pads, nets, vias and zones
+- the thinnest track, smallest via, smallest hole and smallest annular ring
+- total track length and part density
 
-It then compares those numbers with the standard-service limits of **JLCPCB, PCBWay, OSH Park and Eurocircuits**. Each fab shows *compatible* or the list of problems, split into errors (the fab will reject the board) and warnings.
+It compares these with the standard limits of **JLCPCB, PCBWay, OSH Park and Eurocircuits**. Each fab shows *compatible* or a list of problems.
 
 > [!NOTE]
-> Limits are conservative published minimums and fabs change them. Always confirm against the fab's current capability page. Copper-to-copper **clearance** cannot be measured from the file alone; run DRC with the fab's rules.
+> The limits are the fabs' published minimums, and fabs change them. Check the fab's own page before you order. Clearance between copper can't be measured from the file. Run DRC with the fab's rules for that.
 
-Choose your usual fabs under Settings → **Manufacturing & parts** to compare against only those.
+You can pick your usual fabs under **Settings → Manufacturing & parts**.
 
 ## Changelog
 
-Every commit and comparison has a **Design changes** panel, and the API exposes the same summary for any two revisions: `GET /api/repos/{owner}/{repo}/changelog?base=…&head=…`. It is generated from the semantic diff — parts added or removed, value edits (`R1: 10k → 4k7`), new and removed nets, via and length changes — so release notes write themselves.
+Every commit and comparison has a **Design changes** panel. It lists parts added or removed, value changes (`R1: 10k → 4k7`), new and removed nets, and via and length changes.
+
+You can get the same list from the API:
+
+```
+GET /api/repos/{owner}/{repo}/changelog?base=…&head=…
+```
 
 ## Part policy
 
-Define approved manufacturers, preferred part numbers and banned parts or footprints in Settings → **Manufacturing & parts**. `GET …/part-policy?path=<schematic>` checks a schematic's BOM against it and reports violations, using the `MPN` and `Manufacturer` fields of each symbol. Banned patterns accept `*` and `?` wildcards and match the manufacturer part number or the value.
+Under **Settings → Manufacturing & parts** you can list approved manufacturers, preferred parts and banned parts or footprints. Jumper checks each schematic's BOM against it using the `MPN` and `Manufacturer` fields. Banned patterns can use `*` and `?`.
 
 ## Firmware pin map
 
-On a schematic, the **Firmware** tab turns the MCU's pin connections into code:
+On a schematic, the **Firmware** tab turns the MCU's pin connections into code.
 
-| Download | Use |
-|---|---|
-| `pins.h` | `#define PIN_SPI_SCK 5` per connected GPIO |
-| Zephyr overlay | `zephyr,user` node with `spi-sck-gpios = <&gpioa 5 GPIO_ACTIVE_HIGH>;` |
-| CSV | spreadsheets and review |
+| Download       | Example                                                  |
+| -------------- | -------------------------------------------------------- |
+| `pins.h`       | `#define PIN_SPI_SCK 5`                                  |
+| Zephyr overlay | `spi-sck-gpios = <&gpioa 5 GPIO_ACTIVE_HIGH>;`           |
+| CSV            | For spreadsheets                                         |
 
-It reads the netlist produced by the checks (enable `netlist: true` in [`.jumper.yml`](/docs/jumper-yml)). STM32 names (`PA5`) and nRF names (`P0.13`) are understood. Between two revisions, `GET …/pinmap/diff?base=…&head=…` lists every pin whose net changed, so you notice when a schematic edit breaks the firmware.
+It needs the netlist output, which is on by default. STM32 names (`PA5`) and nRF names (`P0.13`) are supported.
+
+To see which pins changed between two revisions:
+
+```
+GET /api/repos/{owner}/{repo}/pinmap/diff?base=…&head=…
+```

@@ -1,34 +1,36 @@
-# Permissions & security
+# Permissions and security
 
-## Roles on a repository
+## Repository roles
 
-| Role | Can |
-|---|---|
-| **Read** | view code, designs, checks and outputs; download fab packages |
-| **Write** | everything above, plus push, re-run checks and manage mirrors |
-| **Admin** | everything above, plus change settings, manage collaborators, webhooks, share links and rules, delete the repository |
+| Role      | Can                                                                 |
+| --------- | ------------------------------------------------------------------- |
+| **Read**  | View files, designs, checks and outputs. Download fab packages.     |
+| **Write** | Everything above, plus push, re-run checks and manage mirrors.      |
+| **Admin** | Everything above, plus settings, collaborators, webhooks, share links and deleting the repository. |
 
-Repositories owned by an organization give **owners** admin and **members** write access. On a personal repository the owner is admin.
+In an organization, owners are admins and members have write access. On a personal repository, the owner is admin.
 
-Private repositories are invisible to people without access: they get "not found", not "forbidden".
+People without access to a private repository get "not found".
 
 ## Access tokens
 
-Git over HTTPS and the API accept a **personal access token** (Settings → Access tokens). Scopes: `repo:read`, `repo:write`, `admin`. Tokens are shown once and stored hashed; give each one the least scope it needs and an expiry.
+Git over HTTPS and the API use personal access tokens. Create them under **Settings → Access tokens**. The scopes are `repo:read`, `repo:write` and `admin`.
 
-## What Jumper does to protect you
+A token is shown once and stored as a hash. Give each token only the scope it needs, and set an expiry.
 
-* Passwords are hashed with Argon2id; sign-in is rate limited and timing-hardened against account enumeration.
-* Sessions use `HttpOnly` cookies; browser writes require a custom header (CSRF protection).
-* Uploaded and rendered files are served with `nosniff` and a sandboxing Content-Security-Policy.
-* Webhook destinations are checked against private networks, and responses are never followed or stored.
-* Share links store only a hash of their token and return the same "not found" for invalid, expired and revoked links.
-* Every sensitive action — token and webhook changes, share links, rules, sign-ins — is written to the audit log.
+## How Jumper protects your data
 
-## Administrators
+- Passwords are hashed with Argon2id. Sign-in is rate limited.
+- Session cookies are `HttpOnly`. Browser writes need a custom header, which blocks CSRF.
+- Uploaded files are served with a strict Content-Security-Policy.
+- Webhooks can't reach private networks.
+- Share links store only a hash.
+- Sign-ins, token changes, webhook changes and share links are written to the security log.
 
-Site administrators are people on the Jumper team. Admin pages need a signed-in admin session; access tokens are refused there.
+## Admins
 
-## Reporting a vulnerability
+Server admins can open the **Admin** pages. These pages need a signed-in session. Access tokens don't work there.
 
-Email the instance operator, or the address in the project's `SECURITY.md`. Please do not report security problems in public.
+## Reporting a security problem
+
+Please email the person who runs your server. Don't post security problems in public.

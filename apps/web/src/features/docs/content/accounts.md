@@ -1,43 +1,46 @@
-# Accounts & organizations
+# Accounts and organizations
 
 ## Your account
 
-**Settings → Account** holds your email address, a data export and account deletion. **Password and authentication** changes your password and signs out your other sessions; **Sessions** shows where you are signed in and lets you sign any of them out.
+- **Settings → Account** has your email, a data export and account deletion.
+- **Settings → Password and authentication** changes your password.
+- **Settings → Sessions** shows where you are signed in. You can sign out any of them.
 
 ### Forgot your password
 
-On the sign-in page choose **Forgot your password?**, enter your username or email, and open the link you receive. It works once, expires after an hour, and signs you out everywhere when you use it. The page never says whether an account exists, so it cannot be used to look people up.
+On the sign-in page, click **Forgot your password?** and enter your username or email. You will get a link. It works once and expires after an hour.
 
-If your instance has no email set up, ask an administrator for a reset link (Admin → Users → *Reset link*).
+If the server has no email set up, ask an admin. They can make a reset link under **Admin → Users**.
 
 ### Export your data
 
-Settings → Account → **Download export** gives you a JSON file with your profile, token metadata (never the secrets) and your recent security log. Your repositories are ordinary git repositories: `git clone` them.
+**Settings → Account → Download export** gives you a JSON file with your profile, your token names and your recent security log. Your repositories are normal git repositories, so you can `git clone` them.
 
 ### Delete your account
 
-Settings → Account → **Delete my account…** shows exactly what will be removed before you confirm with your username and password.
+**Settings → Account → Delete my account** shows what will be removed. You confirm with your username and password.
 
-* **Deleted for good:** your profile, sessions, access tokens and every repository you own, with its git history, checks and stored files. Repositories you connected from GitHub are only removed from Jumper; GitHub is never touched.
-* **Removed:** your access to other people's repositories and organizations.
-* **Blocked until you act:** if you are the only owner of an organization, add another owner or delete the organization first. If you are the only administrator of the instance, make someone else an administrator.
-* Your username becomes available again.
+- Your profile, sessions, tokens and repositories are deleted. Repositories you imported from GitHub are only removed from Jumper.
+- You lose access to other people's repositories and organizations.
+- If you are the only owner of an organization, add another owner or delete it first.
+- If you are the only admin of the server, make someone else an admin first.
 
-This cannot be undone and cannot be done with an API token.
+This cannot be undone.
 
 ## Organizations
 
-Create one from the **+** menu. An organization owns repositories under its own name (`acme/board`) and has one plan and one bill for the team. On the hosted service, organizations come with a paid plan: Pro for small teams, Business for companies (see [Pricing](/pricing)).
+Create one from the **+** menu. An organization owns repositories under its own name, like `acme/board`.
 
-* **Owners** manage everything: members and roles, the profile, deletion.
-* **Members** can push to the organization's repositories.
+- **Owners** can manage members, roles, settings and delete the organization.
+- **Members** can push to the organization's repositories.
 
-Open the organization and choose **Settings** to add people by username, change roles, remove members or leave. An organization always keeps at least one owner. **Delete organization** removes all of its repositories permanently and needs you to type its name.
+Open the organization and click **Settings** to add people, change roles or leave. An organization always has at least one owner.
 
-## Inviting people to an organization
+## Inviting people
 
-Owners open **Organization settings → Access and roles**. Add someone who already has an account by username, or under **Invite people** create a link for someone who does not: choose their role (and, for members, their repository access), optionally add an email to send it to them, and share the link. Each link works once and expires after 7 days; pending links are listed there and can be revoked. Whoever opens the link signs in or creates an account, then joins.
+Owners open **Organization settings → Access and roles**.
 
-## Free plan and storage
+- If the person has an account, add them by username.
+- If not, create an invite link. Pick their role and share the link. You can also enter an email to send it.
 
-New accounts and organizations start on the Free plan with 2 GB of storage for their first 30 days. After that your repositories stay readable, and pushing new data needs a paid plan (see [Pricing](/pricing)). Each person who joins through your invite link (**Settings → Invite people**) adds 1 GB to your personal storage for 15 days. **Settings → Usage and plan** shows when your trial and bonuses run out.
+Each link works once and expires after 7 days. You can revoke pending links on the same page.

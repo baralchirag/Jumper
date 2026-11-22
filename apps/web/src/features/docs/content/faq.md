@@ -1,66 +1,57 @@
-# Troubleshooting & FAQ
+# Troubleshooting
 
 ## Pushing and cloning
 
-**Git keeps asking for my password, or says "Authentication failed".** Use your **username** and a **personal access token**, not your account password. The token needs the `repo:write` scope to push (`repo:read` is enough to clone a private repository). If you changed tokens, clear the old one from your credential helper. On macOS: `git credential-osxkeychain erase`. On Windows: Credential Manager → *Windows Credentials*.
+**Git keeps asking for my password.** Use your username and a personal access token, not your password. Pushing needs the `repo:write` scope. If you changed tokens, clear the old one from your git credential helper.
 
-**`error: 'main' is protected and cannot be force-pushed.`** Protected branches reject rewritten history. Revert the commit instead of resetting, or ask an admin to relax the rule.
+**`'main' is protected and cannot be force-pushed`.** Protected branches don't allow rewritten history. Revert the commit instead of resetting it.
 
-**`rejected … (fetch first)` or `non-fast-forward`.** Someone pushed before you, or the repository was created with a README. Run `git pull --rebase` and push again. For a brand-new repository you can also start over with an empty one.
+**`rejected (fetch first)` or `non-fast-forward`.** Someone pushed before you. Run `git pull --rebase` and push again.
 
-**`Push exceeds the maximum allowed size`.** One push is limited to 500 MB by default (the operator can change this). Push in several commits, and keep generated files such as Gerbers, renders and backups out of git: Jumper generates them for you.
+**`Push exceeds the maximum allowed size`.** One push can be up to 500 MB by default. Push in smaller parts, and don't commit Gerbers, renders or backups.
 
-**Should I commit Gerbers and other fab outputs?** No. They are produced for every commit and available under **Outputs** and as the fab package. Committing them makes diffs noisy and repositories large.
+**Should I commit Gerbers?** No. Jumper makes them for every commit. You'll find them under **Outputs**.
 
 ## Checks
 
-**My project is not detected ("No KiCad project found in this commit").** Jumper looks for `*.kicad_pro` files anywhere in the repository, plus boards committed without one. Check that the files were committed (`git ls-files '*.kicad_*'`) and not excluded by `.gitignore`. If the project is in an unusual place, list it under `projects:` in [`.jumper.yml`](/docs/jumper-yml).
+**"No KiCad project found in this commit".** Jumper looks for `*.kicad_pro` files anywhere in the repository. Check that they are committed with `git ls-files '*.kicad_*'`. If your project is in an odd place, list it under `projects:` in [`.jumper.yml`](/docs/jumper-yml).
 
-**My checks never start.** Open the commit's **Checks** page: checks usually start within a minute of a push. If nothing has started after a few minutes, push again or contact support with the repository and commit.
+**Checks never start.** Checks normally start within a minute. If nothing happens after a few minutes, push again or tell your admin.
 
-**A check says `timed_out`.** A single step gets 5 minutes and a whole commit 10 minutes by default. Very large boards rendered at high quality are the usual cause. Branches already render at basic quality; for the default branch set `render_quality: basic`, or turn off outputs you do not need.
+**A check says `timed_out`.** One step gets 5 minutes and a whole commit gets 10. Big boards with high-quality renders are the usual cause. Set `render_quality: basic` or turn off outputs you don't need.
 
-**DRC fails with "unconnected items" on a board I'm still routing.** Set `checks.drc.fail_on_unconnected: false` until routing is finished, or `fail_on: never` to see violations without failing.
+**DRC fails with "unconnected items" while I'm still routing.** Set `checks.drc.fail_on_unconnected: false` until routing is done.
 
-**ERC or DRC fails on something that is fine for this board.** Re-grade that rule under `severity_overrides` (for example `silk_overlap: ignore`) instead of turning the whole check off.
+**ERC or DRC fails on a rule that's fine for this board.** Change that one rule under `severity_overrides`, for example `silk_overlap: ignore`.
 
-**The 3D view has missing parts, or boxes instead of components.** The footprint points at a 3D model Jumper cannot find. Models from KiCad's standard library are found automatically, including old paths such as `${KICAD6_3DMODEL_DIR}` and `.wrl` names. Custom models must be committed to the repository and referenced with `${KIPRJMOD}/…`. The Render check lists every model it could not resolve.
-
-**Symbols or footprints look wrong in the render.** Schematics and boards embed the symbols and footprints they use, so renders normally match KiCad exactly. If a project depends on project-specific libraries, commit the library files and the `sym-lib-table` / `fp-lib-table` next to the project.
+**Parts are missing in the 3D view.** The footprint points to a 3D model Jumper can't find. Models from KiCad's own library are found automatically. Custom models must be committed and referenced with `${KIPRJMOD}/…`. The Render check lists every missing model.
 
 ### Missing libraries
 
-The ERC and DRC results list every symbol and footprint library the project uses that a fresh clone cannot find, plus sheet files and 3D models that were not committed. Jumper still renders the design from the copies KiCad keeps inside it, but a teammate who clones it gets a warning per symbol and cannot update parts from those libraries.
+ERC and DRC list libraries that a fresh clone can't find.
 
-| What the check says | What to do |
+| Message | Fix |
 | --- | --- |
-| *Not a standard KiCad library and not in the project's sym-lib-table* | The library lives only on the author's computer. Copy it into the repository (for example `libs/MyParts.kicad_sym`), then in KiCad open **Preferences → Manage Symbol Libraries → Project Specific Libraries**, add it with the path `${KIPRJMOD}/libs/MyParts.kicad_sym`, and commit `sym-lib-table` too. |
-| *Listed in the project's sym-lib-table, but that file is not committed* | The table is there but the library file is not. Check `.gitignore`, then `git add` the file. |
-| The same for footprints | Footprint libraries are folders ending in `.pretty`. Commit the folder and list it under **Project Specific Libraries** in **Manage Footprint Libraries** (`fp-lib-table`). |
-| *… is used as a sheet but is not committed* | A hierarchical sheet file is missing. Its pages are missing from renders and the BOM until you commit it. |
+| *Not a standard KiCad library and not in the project's sym-lib-table* | Copy the library into the repository, add it under **Preferences → Manage Symbol Libraries → Project Specific Libraries** with `${KIPRJMOD}/…`, and commit `sym-lib-table`. |
+| *Listed in the project's sym-lib-table, but that file is not committed* | Check `.gitignore` and `git add` the file. |
+| *… is used as a sheet but is not committed* | Commit the missing sheet file. |
 
-Standard KiCad libraries (`Device`, `Resistor_SMD`, …) never need committing.
+Footprint libraries work the same way. They are folders ending in `.pretty`, listed in `fp-lib-table`.
 
-**The Fab check tab says it cannot analyse the board.** The file must be a valid `.kicad_pcb`. Very old formats (KiCad 5 and earlier) are not supported: open and re-save the board in KiCad 7 or newer.
+You never need to commit standard KiCad libraries like `Device` or `Resistor_SMD`.
 
-**The Firmware tab says there is no netlist.** Make sure `netlist` under `outputs` in `.jumper.yml` is not set to `false`, then wait for the checks on that commit to finish.
+**The Fab check can't read the board.** KiCad 5 and older files are not supported. Open and save the board in KiCad 7 or newer.
 
-## Comparing and mirroring
+## Mirrors
 
-**My GitHub repository stopped updating on Jumper.** Open the repository's **Settings → Mirroring**. The last error is shown there; the usual cause is an expired GitHub token. Paste a new one and choose **Sync now**.
+**My GitHub repository stopped updating.** Open **Settings → Mirroring** to see the last error. Most of the time the GitHub token has expired. Paste a new one and press **Sync now**.
 
-**Two people edited the same board and the branches conflict.** KiCad files are text but are not safe to merge line by line. Use **Compare** to see both changes on the board, then have one person redo the smaller change in KiCad on top of the other.
+**Two people changed the same board.** KiCad files can't be merged line by line safely. Use **Compare** to see both changes, then redo the smaller one in KiCad on top of the other.
 
-## Accounts and access
+## Accounts
 
-**I forgot my password.** Use *Forgot your password?* on the sign-in page. If your instance has no email, ask an administrator for a reset link.
+**I lost a share link.** Links can't be recovered. Revoke it and make a new one.
 
-**I lost a share link.** Links cannot be recovered, because only a hash is stored. Revoke the old one and create a new one.
+**A webhook says "Destination resolves to a non-public address".** Webhooks can't call private networks. Use a public `https://` address.
 
-**A webhook shows "Destination resolves to a non-public address".** Jumper refuses to call private networks. Expose your endpoint on a public https address.
-
-**I can't delete my account.** The dialog says why: you are the only owner of an organization, or the only administrator. Fix that first, then try again.
-
-## Still stuck?
-
-Send the failing check's log (**Checks → Details**) to the operator of your instance. Their address is on the [terms](/terms) page.
+**I can't delete my account.** The dialog tells you why. Usually you are the only owner of an organization or the only admin.

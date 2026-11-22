@@ -18,6 +18,7 @@ import sshDoc from './content/ssh.md?raw';
 import mirroring from './content/mirroring.md?raw';
 import largeFiles from './content/large-files.md?raw';
 import embeds from './content/embeds.md?raw';
+import selfHosting from './content/self-hosting.md?raw';
 import { markdownToc } from '../../shared/lib/markdown';
 
 interface Doc {
@@ -51,10 +52,11 @@ const SECTIONS: { title: string; docs: Doc[] }[] = [
     ],
   },
   {
-    title: 'Security & help',
+    title: 'Running Jumper',
     docs: [
       { slug: 'permissions', title: 'Permissions & security', source: permissions },
-      { slug: 'faq', title: 'Troubleshooting & FAQ', source: faq },
+      { slug: 'self-hosting', title: 'Self-hosting', source: selfHosting },
+      { slug: 'faq', title: 'Troubleshooting', source: faq },
     ],
   },
 ];
