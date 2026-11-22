@@ -49,11 +49,12 @@ export function CardBilling({ owner, billing: b, queryKey, isOrg }: { owner: str
     let n = 0;
     const t = setInterval(() => {
       n++;
-      void qc.invalidateQueries({ queryKey });
+      // Read the subscription from Stripe directly, so a late (or unconfigured) webhook doesn't keep people waiting.
+      void api.post<BillingInfo>(`/owners/${enc(owner)}/billing/sync`).then((d) => qc.setQueryData(queryKey, d), () => {});
       if (n >= 15) clearInterval(t);
     }, 2000);
     return () => clearInterval(t);
-  }, [returned, sub, qc, queryKey]);
+  }, [returned, sub, qc, queryKey, owner]);
   // The plan shows in the header and usage panels too: refresh them once the subscription lands or changes.
   const subKey = sub ? `${sub.plan}:${sub.status}:${sub.cancelAtPeriodEnd}` : 'none';
   useEffect(() => {

@@ -10,7 +10,7 @@
 // plans.ts changes, a new Stripe price takes over the lookup key; existing subscribers keep their old price until
 // they change plan.
 import Stripe from 'stripe';
-import { eq, invoices, namespaces, stripeEvents, type Namespace } from '@jumper/db';
+import { eq, invoices, isNotNull, namespaces, stripeEvents, type Namespace } from '@jumper/db';
 import { isPlanId, type BillingCycle, type CardPlanId, type PlanId, type SubscriptionInfo } from '@jumper/shared';
 import type { Ctx } from '../../context';
 import { badRequest, conflict } from '../../lib/errors';
@@ -18,8 +18,13 @@ import { usageFor } from '../usage/service';
 
 const clients = new WeakMap<Ctx, Stripe>();
 
+/**
+ * Card payments need only the secret key. Webhooks (STRIPE_WEBHOOK_SECRET) keep Jumper in step with changes made on
+ * Stripe's side within seconds; without them, Jumper reads the subscription from Stripe when someone returns from
+ * checkout and in the hourly sweep.
+ */
 export function cardPaymentsEnabled(ctx: Ctx): boolean {
-  return Boolean(ctx.env.STRIPE_SECRET_KEY && ctx.env.STRIPE_WEBHOOK_SECRET);
+  return Boolean(ctx.env.STRIPE_SECRET_KEY);
 }
 
 export function stripeFor(ctx: Ctx): Stripe {
@@ -226,14 +231,36 @@ export function seatsChanged(ctx: Ctx, where: { orgId?: string | null; namespace
   })().catch(() => {});
 }
 
+/**
+ * Read the namespace's subscription and recent invoices straight from Stripe and apply them. Used when someone returns
+ * from checkout (so the plan switches on even if the webhook is late or not configured) and by the hourly sweep.
+ */
+export async function syncFromStripe(ctx: Ctx, ns: Namespace): Promise<Namespace> {
+  if (!cardPaymentsEnabled(ctx) || !ns.stripeCustomerId) return ns;
+  const stripe = stripeFor(ctx);
+  const subs = await stripe.subscriptions.list({ customer: ns.stripeCustomerId, status: 'all', limit: 5 });
+  // The live one if there is one, else the most recent (so an ended subscription is noticed too).
+  const pick = subs.data.find((s) => ACTIVE.has(s.status)) ?? subs.data.find((s) => s.status === 'incomplete') ?? subs.data[0];
+  let current = ns;
+  if (pick) current = (await applySubscription(ctx, pick)) ?? ns;
+  const invs = await stripe.invoices.list({ customer: ns.stripeCustomerId, limit: 12 });
+  for (const inv of invs.data) await applyInvoice(ctx, inv);
+  return current;
+}
+
 /** Seat sync for every namespace paying by card (the hourly sweep). */
 export async function syncAllSeats(ctx: Ctx): Promise<{ checked: number; updated: number; failed: number }> {
   if (!cardPaymentsEnabled(ctx)) return { checked: 0, updated: 0, failed: 0 };
-  const rows = await ctx.db.select().from(namespaces).where(eq(namespaces.subscriptionStatus, 'active'));
+  // Without webhooks, also re-read every card customer's subscription (cancellations made in Stripe's portal, failed
+  // renewals). With webhooks, only the paying ones need a seat check.
+  const rows = ctx.env.STRIPE_WEBHOOK_SECRET
+    ? await ctx.db.select().from(namespaces).where(eq(namespaces.subscriptionStatus, 'active'))
+    : await ctx.db.select().from(namespaces).where(isNotNull(namespaces.stripeCustomerId));
   let updated = 0;
   let failed = 0;
-  for (const ns of rows) {
+  for (const row of rows) {
     try {
+      const ns = ctx.env.STRIPE_WEBHOOK_SECRET ? row : await syncFromStripe(ctx, row);
       if (await syncSeats(ctx, ns)) updated++;
     } catch {
       failed++;

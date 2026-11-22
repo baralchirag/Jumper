@@ -20,6 +20,7 @@ class FakeStripe {
   customers: Record<string, any>[] = [];
   sessions: Record<string, string>[] = [];
   subs = new Map<string, any>();
+  invoices: Record<string, any>[] = [];
   calls: string[] = [];
 
   id(prefix: string) {
@@ -41,6 +42,7 @@ class FakeStripe {
     this.customers = [];
     this.sessions = [];
     this.subs.clear();
+    this.invoices = [];
     this.calls = [];
   }
 
@@ -85,6 +87,11 @@ class FakeStripe {
       return [200, { id: this.id('cs'), object: 'checkout.session', url: 'https://checkout.stripe.test/pay' }];
     }
     if (req.method === 'POST' && path === '/v1/billing_portal/sessions') return [200, { id: this.id('bps'), object: 'billing_portal.session', url: 'https://billing.stripe.test/p' }];
+    if (req.method === 'GET' && path === '/v1/subscriptions') {
+      const c = u.searchParams.get('customer');
+      return [200, { object: 'list', data: [...this.subs.values()].filter((x) => x.customer === c).reverse(), has_more: false }];
+    }
+    if (req.method === 'GET' && path === '/v1/invoices') return [200, { object: 'list', data: this.invoices.filter((x) => x.customer === u.searchParams.get('customer')), has_more: false }];
     if (path.startsWith('/v1/subscriptions/')) {
       const sub = this.subs.get(path.split('/').pop()!);
       if (!sub) return err(404, 'No such subscription');
@@ -268,6 +275,42 @@ describe.skipIf(!dbAvailable)('card payments with Stripe', () => {
     expect((await bob.post('/api/owners/acme/billing/checkout', { plan: 'team', cycle: 'monthly' })).status).toBe(403);
     expect((await bob.post('/api/owners/alice/billing/checkout', { plan: 'pro', cycle: 'monthly' })).status).toBe(404);
     expect((await alice.post('/api/owners/alice/billing/checkout', { plan: 'enterprise', cycle: 'monthly' })).status).toBe(400);
+  });
+});
+
+describe.skipIf(!dbAvailable)('card payments without webhooks', () => {
+  const stripe = new FakeStripe();
+  let h: Harness;
+  beforeAll(async () => {
+    await stripe.start();
+    h = await createHarness({ env: { STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_API_BASE: stripe.url, PUBLIC_URL: 'https://jumper.test' } });
+  });
+  afterAll(async () => {
+    await h.close();
+    stripe.server.close();
+  });
+  beforeEach(async () => {
+    await h.reset();
+    stripe.reset();
+    clearPriceCache();
+  });
+
+  it('switches the plan on when the buyer returns, by asking Stripe', async () => {
+    const alice = await h.user('alice');
+    expect((await alice.get('/api/owners/alice/billing')).json.cardPayments).toBe(true);
+    expect((await alice.post('/api/owners/alice/billing/checkout', { plan: 'pro', cycle: 'monthly', from: 'pricing' })).status).toBe(200);
+    expect(stripe.sessions[0]!.cancel_url).toBe('https://jumper.test/pricing?checkout=cancelled');
+    const ns = ((await h.ctx.db.execute(sql`select * from namespaces where slug = 'alice'`)) as unknown as Record<string, any>[])[0]!;
+    stripe.subscribe(ns.stripe_customer_id, ns.id, 'jumper_pro_monthly');
+    stripe.invoices.push({ id: 'in_9', object: 'invoice', number: 'JMPR-0009', status: 'paid', customer: ns.stripe_customer_id, total: 1200, subtotal: 1200, created: 1, status_transitions: {}, lines: { object: 'list', data: [] } });
+    const synced = await alice.post('/api/owners/alice/billing/sync');
+    expect(synced.status, synced.body).toBe(200);
+    expect(synced.json.plan).toBe('pro');
+    expect(synced.json.subscription.status).toBe('active');
+    expect(synced.json.invoices[0]).toMatchObject({ number: 'JMPR-0009', source: 'stripe' });
+    // No webhook secret: the endpoint is not there.
+    const res = await h.app.inject({ method: 'POST', url: '/api/stripe/webhook', payload: '{}', headers: { 'content-type': 'application/json', 'stripe-signature': 'x' } });
+    expect(res.statusCode).toBe(404);
   });
 });
 

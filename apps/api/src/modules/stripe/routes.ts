@@ -7,13 +7,16 @@ import { audit } from '../audit/audit';
 import { requireScope } from '../auth/plugin';
 import { loadOwner } from '../policy/routes';
 import { billingInfoFor } from '../billing/routes';
-import { changePlan, createCheckout, createPortal, handleEvent, setCancelAtPeriodEnd, stripeFor } from './service';
+import { changePlan, createCheckout, createPortal, handleEvent, setCancelAtPeriodEnd, stripeFor, syncFromStripe } from './service';
 
 const ownerParams = z.object({ owner: z.string().max(100) });
 
 /** Checkout, the customer portal and plan changes for the owner of a namespace. */
 export const stripeRoutes: FastifyPluginAsyncZod = async (app) => {
   const ctx = app.ctx;
+  if (ctx.env.STRIPE_SECRET_KEY && !ctx.env.STRIPE_WEBHOOK_SECRET) {
+    app.log.warn('Stripe: STRIPE_WEBHOOK_SECRET is not set. Plans switch on when people return from checkout, and changes made in Stripe are picked up hourly. Add a webhook endpoint at /api/stripe/webhook for instant updates.');
+  }
 
   app.post('/owners/:owner/billing/checkout', { schema: { params: ownerParams, body: checkoutSchema }, config: { rateLimit: { max: 20, timeWindow: '1 hour' } } }, async (req): Promise<{ url: string }> => {
     requireScope(req, 'admin');
@@ -27,6 +30,13 @@ export const stripeRoutes: FastifyPluginAsyncZod = async (app) => {
     requireScope(req, 'admin');
     const { ns } = await loadOwner(req, req.params.owner, 'owner');
     return { url: await createPortal(ctx, ns) };
+  });
+
+  // Called by the page people land on after paying: reads the subscription from Stripe instead of waiting for the webhook.
+  app.post('/owners/:owner/billing/sync', { schema: { params: ownerParams }, config: { rateLimit: { max: 120, timeWindow: '1 hour' } } }, async (req) => {
+    const { ns } = await loadOwner(req, req.params.owner, 'owner');
+    await syncFromStripe(ctx, ns);
+    return billingInfoFor(ctx, ns.id);
   });
 
   app.put('/owners/:owner/billing/subscription', { schema: { params: ownerParams, body: checkoutSchema } }, async (req) => {
@@ -63,7 +73,7 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
   app.addContentTypeParser('application/json', { parseAs: 'buffer', bodyLimit: 1024 * 1024 }, (_req, body, done) => done(null, body));
 
   app.post('/stripe/webhook', { config: { rateLimit: false } }, async (req, reply) => {
-    if (!ctx.env.STRIPE_WEBHOOK_SECRET || !ctx.env.STRIPE_SECRET_KEY) return reply.code(404).send({ error: 'not_found', message: 'Card payments are not set up' });
+    if (!ctx.env.STRIPE_WEBHOOK_SECRET || !ctx.env.STRIPE_SECRET_KEY) return reply.code(404).send({ error: 'not_found', message: 'Stripe webhooks are not set up on this server' });
     const sig = req.headers['stripe-signature'];
     if (typeof sig !== 'string' || !Buffer.isBuffer(req.body)) throw badRequest('Missing Stripe signature');
     let event;

@@ -197,7 +197,8 @@ export function CheckoutDonePage() {
   const [tries, setTries] = useState(0);
   const q = useQuery({
     queryKey: ['billing', owner],
-    queryFn: () => api.get<BillingInfo>(`/owners/${enc(owner)}/billing`),
+    // Ask Stripe directly rather than wait for the webhook.
+    queryFn: () => api.post<BillingInfo>(`/owners/${enc(owner)}/billing/sync`),
     enabled: Boolean(owner && me),
     refetchInterval: (query) => (query.state.data?.subscription || tries > 20 ? false : 1500),
   });
