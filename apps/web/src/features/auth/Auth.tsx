@@ -104,7 +104,7 @@ export function LoginPage() {
     try {
       const me = await api.post<CurrentUser>('/auth/login', { login, password, code: needCode ? code : undefined });
       qc.setQueryData(keys.me, me);
-      void navigate({ to });
+      void navigate({ href: to });
     } catch (err) {
       if (err instanceof ApiError && err.code === 'two_factor_required') {
         setNeedCode(true);
@@ -189,7 +189,7 @@ export function SignupPage() {
     try {
       const me = await api.post<CurrentUser>('/auth/register', { ...form, ref });
       qc.setQueryData(keys.me, me);
-      void navigate({ to: safeRedirect(redirect) });
+      void navigate({ href: safeRedirect(redirect) });
     } catch (err) {
       setError(errorMessage(err));
     } finally {

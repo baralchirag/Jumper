@@ -152,7 +152,8 @@ describe.skipIf(!dbAvailable)('card payments with Stripe', () => {
     const session = stripe.sessions[0]!;
     expect(session['line_items[0][quantity]']).toBe('1');
     expect(session.mode).toBe('subscription');
-    expect(session.success_url).toBe('https://jumper.test/settings/usage?checkout=success');
+    expect(session.success_url).toBe('https://jumper.test/checkout/done?owner=alice&plan=pro');
+    expect(session.cancel_url).toBe('https://jumper.test/settings/usage?checkout=cancelled');
     const a = await ns('alice');
     expect(a.stripe_customer_id).toBe(stripe.customers[0]!.id);
 
@@ -228,7 +229,8 @@ describe.skipIf(!dbAvailable)('card payments with Stripe', () => {
     expect((await alice.post('/api/orgs', { slug: 'acme', name: 'Acme' })).status).toBe(200);
     const co = await alice.post('/api/owners/acme/billing/checkout', { plan: 'team', cycle: 'monthly' });
     expect(co.status, co.body).toBe(200);
-    expect(stripe.sessions[0]!.success_url).toBe('https://jumper.test/organizations/acme/settings/billing?checkout=success');
+    expect(stripe.sessions[0]!.success_url).toBe('https://jumper.test/checkout/done?owner=acme&plan=team');
+    expect(stripe.sessions[0]!.cancel_url).toBe('https://jumper.test/organizations/acme/settings/billing?checkout=cancelled');
     const acme = await ns('acme');
     const sub = stripe.subscribe(acme.stripe_customer_id, acme.id, 'jumper_team_monthly', 1);
     expect((await webhook('customer.subscription.created', sub)).status).toBe(200);

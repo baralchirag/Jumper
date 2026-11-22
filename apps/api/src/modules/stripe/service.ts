@@ -131,19 +131,21 @@ export function billingPath(ns: Namespace): string {
   return ns.kind === 'org' ? `/organizations/${encodeURIComponent(ns.slug)}/settings/billing` : '/settings/usage';
 }
 
-export async function createCheckout(ctx: Ctx, ns: Namespace, email: string, plan: CardPlanId, cycle: BillingCycle): Promise<string> {
+export async function createCheckout(ctx: Ctx, ns: Namespace, email: string, plan: CardPlanId, cycle: BillingCycle, from: 'pricing' | 'billing' = 'billing'): Promise<string> {
   if (hasLiveSubscription(ns)) throw conflict('This account already has a card subscription. Change the plan instead.');
   const stripe = stripeFor(ctx);
   const [customer, price, seats] = await Promise.all([customerFor(ctx, ns, email), priceFor(ctx, plan, cycle), seatsFor(ctx, ns)]);
   const limit = ctx.env.plans[plan].limits.seats;
   if (limit !== null && seats > limit) throw badRequest(`${ns.slug} has ${seats} seats in use; the ${ctx.env.plans[plan].name} plan allows ${limit}. Choose a bigger plan.`);
-  const back = `${ctx.env.PUBLIC_URL.replace(/\/$/, '')}${billingPath(ns)}`;
+  const site = ctx.env.PUBLIC_URL.replace(/\/$/, '');
+  const back = from === 'pricing' ? `${site}/pricing` : `${site}${billingPath(ns)}`;
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
     customer,
     client_reference_id: ns.id,
     line_items: [{ price, quantity: seats }],
-    success_url: `${back}?checkout=success`,
+    // A thank-you page that waits for the webhook, then says the plan is on.
+    success_url: `${site}/checkout/done?owner=${encodeURIComponent(ns.slug)}&plan=${plan}`,
     cancel_url: `${back}?checkout=cancelled`,
     allow_promotion_codes: true,
     billing_address_collection: 'auto',

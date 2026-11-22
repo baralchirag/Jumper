@@ -18,7 +18,7 @@ export const stripeRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post('/owners/:owner/billing/checkout', { schema: { params: ownerParams, body: checkoutSchema }, config: { rateLimit: { max: 20, timeWindow: '1 hour' } } }, async (req): Promise<{ url: string }> => {
     requireScope(req, 'admin');
     const { ns, user } = await loadOwner(req, req.params.owner, 'owner');
-    const url = await createCheckout(ctx, ns, user.email, req.body.plan, req.body.cycle);
+    const url = await createCheckout(ctx, ns, user.email, req.body.plan, req.body.cycle, req.body.from);
     await audit(req, 'billing.checkout', { type: ns.kind, id: ns.id }, { plan: req.body.plan, cycle: req.body.cycle }, undefined, ns.id);
     return { url };
   });

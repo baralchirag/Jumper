@@ -261,11 +261,11 @@ export function UsagePanel({ owner }: { owner: string }) {
                     : 'Pro gives you 20 GB and 3,000 check minutes a month for private client work.'}
                 </p>
                 <Link
-                  to="/pricing"
-                  search={{ for: r.kind === 'org' ? 'organization' : 'personal' }}
+                  to="/checkout"
+                  search={r.kind === 'org' ? { plan: 'team', owner } : { plan: 'pro' }}
                   className={buttonClass('accent', 'sm', 'mt-auto w-fit')}
                 >
-                  See plans
+                  {r.kind === 'org' ? 'Get Business' : 'Get Pro'}
                 </Link>
               </div>
             )}

@@ -308,6 +308,8 @@ export type CardPlanId = (typeof CARD_PLANS)[number];
 export const checkoutSchema = z.object({
   plan: z.enum(CARD_PLANS),
   cycle: z.enum(BILLING_CYCLES),
+  /** Where "back" on Stripe's page returns to: the pricing page or the billing settings. */
+  from: z.enum(['pricing', 'billing']).default('billing'),
 });
 
 export interface SubscriptionInfo {

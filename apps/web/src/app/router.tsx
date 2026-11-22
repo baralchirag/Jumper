@@ -34,6 +34,8 @@ const SearchPage = lazyRouteComponent(() => import('../features/search/Search'),
 const RepoSearchPage = lazyRouteComponent(() => import('../features/search/Search'), 'RepoSearchPage');
 const NotificationsPage = lazyRouteComponent(() => import('../features/notifications/Notifications'), 'NotificationsPage');
 const PricingPage = lazyRouteComponent(() => import('../features/pricing/Pricing'), 'PricingPage');
+const CheckoutPage = lazyRouteComponent(() => import('../features/pricing/Checkout'), 'CheckoutPage');
+const CheckoutDonePage = lazyRouteComponent(() => import('../features/pricing/Checkout'), 'CheckoutDonePage');
 const SharePage = lazyRouteComponent(() => import('../features/share/SharePage'), 'SharePage');
 const TermsPage = lazyRouteComponent(() => import('../features/legal/Legal'), 'TermsPage');
 const PrivacyPage = lazyRouteComponent(() => import('../features/legal/Legal'), 'PrivacyPage');
@@ -90,6 +92,18 @@ const adminDbRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admi
 const adminTableRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin/database/$table', validateSearch: dbSearch, component: AdminDatabasePage });
 const notificationsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/notifications', component: NotificationsPage });
 const pricingRoute = createRoute({ getParentRoute: () => rootRoute, path: '/pricing', validateSearch: (s: Record<string, unknown>): { for?: 'personal' | 'organization' } => ({ for: s.for === 'organization' ? 'organization' : s.for === 'personal' ? 'personal' : undefined }), component: PricingPage });
+const checkoutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/checkout',
+  validateSearch: (s: Record<string, unknown>): { plan?: string; cycle?: string; owner?: string } => ({ plan: str(s.plan), cycle: str(s.cycle), owner: str(s.owner) }),
+  component: CheckoutPage,
+});
+const checkoutDoneRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/checkout/done',
+  validateSearch: (s: Record<string, unknown>): { owner?: string; plan?: string } => ({ owner: str(s.owner), plan: str(s.plan) }),
+  component: CheckoutDonePage,
+});
 const termsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/terms', component: TermsPage });
 const privacyRoute = createRoute({ getParentRoute: () => rootRoute, path: '/privacy', component: PrivacyPage });
 const refundsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/refunds', component: RefundsPage });
@@ -154,6 +168,8 @@ const repoSearchRoute = createRoute({ getParentRoute: () => repoRoute, path: '/s
 const routeTree = rootRoute.addChildren([
   indexRoute,
   pricingRoute,
+  checkoutRoute,
+  checkoutDoneRoute,
   termsRoute,
   privacyRoute,
   refundsRoute,

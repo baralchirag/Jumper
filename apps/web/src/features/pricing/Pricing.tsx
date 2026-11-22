@@ -62,10 +62,13 @@ export function PricingPage() {
   const firstOrg = me?.orgs.find((o) => o.role === 'owner');
 
   const cta = (id: PlanId): { label: string; to: string; params?: Record<string, string>; search?: Record<string, string>; primary: boolean } => {
-    if (!me) return { label: id === 'free' ? 'Start the trial' : id === 'enterprise' ? 'Contact us' : `Get ${DEFAULT_PLANS[id].name}`, to: '/signup', primary: id === 'pro' };
-    if (id === 'free' || id === 'pro') return id === 'free' ? { label: 'See your trial', to: '/settings/$section', params: { section: 'usage' }, primary: false } : { label: 'Get Pro', to: '/settings/$section', params: { section: 'usage' }, search: { plan: 'pro', cycle }, primary: true };
-    if (!firstOrg) return { label: 'Create an organization', to: '/organizations/new', primary: false };
-    return { label: id === 'enterprise' ? 'Contact us' : 'Upgrade organization', to: '/organizations/$org/settings/$section', params: { org: firstOrg.slug, section: 'billing' }, search: id === 'team' ? { plan: 'team', cycle } : undefined, primary: false };
+    // Pro and Business go straight to payment: /checkout signs you in first if needed, then opens Stripe.
+    if (id === 'pro') return { label: 'Get Pro', to: '/checkout', search: { plan: 'pro', cycle }, primary: true };
+    if (id === 'team') return { label: 'Get Business', to: '/checkout', search: { plan: 'team', cycle }, primary: false };
+    if (id === 'free') return me ? { label: 'See your trial', to: '/settings/$section', params: { section: 'usage' }, primary: false } : { label: 'Start the trial', to: '/signup', primary: false };
+    return firstOrg
+      ? { label: 'Contact us', to: '/organizations/$org/settings/$section', params: { org: firstOrg.slug, section: 'billing' }, primary: false }
+      : { label: 'Contact us', to: me ? '/organizations/new' : '/signup', primary: false };
   };
 
   // Someone already paying has no use for the sales page: send them to their plan instead.
@@ -76,6 +79,9 @@ export function PricingPage() {
 
   return (
     <PageContainer className="max-w-[1280px] py-12 md:py-16">
+      {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('checkout') === 'cancelled' && (
+        <p className="mb-6 rounded-sm border border-border-muted border-l-2 border-l-fg-subtle bg-canvas-subtle px-4 py-3 text-sm">Checkout cancelled. Nothing was charged.</p>
+      )}
       <header className="mb-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
         <div>
           <h1 className="text-[clamp(2.5rem,1.6rem+2.6vw,4rem)] font-medium leading-[0.95]">Pricing</h1>
