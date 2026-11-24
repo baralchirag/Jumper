@@ -13,9 +13,7 @@ RUN pnpm install --frozen-lockfile \
  && pnpm --filter @jumper/kicad-core run build:node \
  && pnpm --filter @jumper/worker build \
  && pnpm --filter @jumper/worker deploy --prod --legacy /out \
- && cp -r apps/worker/dist /out/dist \
- && mkdir -p /out/node_modules/@jumper/kicad-core \
- && cp -r packages/kicad-core/package.json packages/kicad-core/pkg-node /out/node_modules/@jumper/kicad-core/
+ && cp -r apps/worker/dist /out/dist
 
 FROM kicad/kicad:${KICAD_VERSION}
 USER root

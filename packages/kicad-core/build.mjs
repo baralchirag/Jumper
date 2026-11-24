@@ -3,7 +3,7 @@
 // installed but earlier build output is present, reuse it instead of failing, so `pnpm dev` works on machines
 // that only change the TypeScript side. Install Rust + wasm-pack to rebuild after editing src/*.rs.
 import { execSync, spawnSync } from 'node:child_process';
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,4 +26,6 @@ const run = (cmd) => execSync(cmd, { cwd: here, stdio: 'inherit' });
 run('wasm-pack build --target web --out-dir pkg-web --out-name kicad_core --release --no-pack -- --features wasm');
 run('wasm-pack build --target nodejs --out-dir pkg-node --out-name kicad_core --release --no-pack -- --features wasm');
 writeFileSync(join(here, 'pkg-node/package.json'), JSON.stringify({ type: 'commonjs' }));
+// wasm-pack writes a `*` .gitignore into each output folder, which would make `pnpm deploy` skip them.
+for (const dir of ['pkg-web', 'pkg-node']) rmSync(join(here, dir, '.gitignore'), { force: true });
 run('cargo build --release --features cli');

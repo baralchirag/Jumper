@@ -11,8 +11,6 @@ RUN pnpm install --frozen-lockfile \
  && pnpm --filter @jumper/api build \
  && pnpm --filter @jumper/api deploy --prod --legacy /out \
  && cp -r apps/api/dist /out/dist \
- && mkdir -p /out/node_modules/@jumper/kicad-core \
- && cp -r packages/kicad-core/package.json packages/kicad-core/pkg-node /out/node_modules/@jumper/kicad-core/ \
  && cp -r packages/db/drizzle /out/drizzle \
  && mkdir -p /out/plugins && cp -r plugins/kicad /out/plugins/kicad
 

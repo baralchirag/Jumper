@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "files": [
+    "ts",
+    "pkg-node",
+    "pkg-web"
+  ],
   "exports": {
     "./types": "./ts/types.ts",
     "./node": "./ts/node.ts",
@@ -12,8 +17,8 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "build:web": "wasm-pack build --target web --out-dir pkg-web --out-name kicad_core --release --no-pack -- --features wasm",
-    "build:node": "wasm-pack build --target nodejs --out-dir pkg-node --out-name kicad_core --release --no-pack -- --features wasm && node -e \"require('fs').writeFileSync('pkg-node/package.json', JSON.stringify({type:'commonjs'}))\"",
+    "build:web": "wasm-pack build --target web --out-dir pkg-web --out-name kicad_core --release --no-pack -- --features wasm && node -e \"require('fs').rmSync('pkg-web/.gitignore',{force:true})\"",
+    "build:node": "wasm-pack build --target nodejs --out-dir pkg-node --out-name kicad_core --release --no-pack -- --features wasm && node -e \"require('fs').writeFileSync('pkg-node/package.json', JSON.stringify({type:'commonjs'}));require('fs').rmSync('pkg-node/.gitignore',{force:true})\"",
     "build:cli": "cargo build --release --features cli",
     "test": "cargo test",
     "lint": "cargo clippy --all-targets --features cli -- -D warnings",
