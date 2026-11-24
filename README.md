@@ -32,7 +32,7 @@ It's free and open source. You can run it on your own server with Docker.
 ## Run it with Docker
 
 ```sh
-git clone https://github.com/baralchirag/gitcad.git jumper
+git clone https://github.com/baralchirag/Jumper.git jumper
 cd jumper
 cp .env.example .env
 # set POSTGRES_PASSWORD, MINIO_ROOT_USER and MINIO_ROOT_PASSWORD in .env
